@@ -1,3 +1,4 @@
+nltk
 stellargraph 
 neo4j
 docker
