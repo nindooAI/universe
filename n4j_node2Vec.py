@@ -1,9 +1,9 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # # Preprocessing Discover Graph text data
 
-# In[74]:
+# In[1]:
 
 
 from neo4j import GraphDatabase, basic_auth
@@ -19,7 +19,7 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
 
-# In[75]:
+# In[2]:
 
 
 import networkx as nx
@@ -42,7 +42,7 @@ import matplotlib.pyplot as plt
 nltk.download('averaged_perceptron_tagger')
 
 
-# In[76]:
+# In[3]:
 
 
 driver = GraphDatabase.driver( "bolt://localhost:7687",  auth=basic_auth("neo4j", "nindoo123"))
@@ -52,7 +52,7 @@ driver = GraphDatabase.driver( "bolt://localhost:7687",  auth=basic_auth("neo4j"
 
 # ### Puxando Edges
 
-# In[77]:
+# In[4]:
 
 
 pulling_query = """            MATCH (a)-->(b)
@@ -68,7 +68,7 @@ edges_db.head()
 
 # ### puxando labels
 
-# In[78]:
+# In[5]:
 
 
 pulling_query = """            MATCH (a)
@@ -85,21 +85,21 @@ labels.head()
 
 # ### Criando grafo
 
-# In[79]:
+# In[6]:
 
 
 graph = sg.StellarGraph(edges =  edges_db)
 print(graph.info())
 
 
-# In[80]:
+# In[7]:
 
 
 
 walk_length = 100  # maximum/ length of a random walk to use throughout this noteboo
 
 
-# In[81]:
+# In[8]:
 
 
 rw = sg.data.BiasedRandomWalk(graph)
@@ -115,13 +115,13 @@ weighted_walks = rw.run(
 print("Number of random walks: {}".format(len(weighted_walks)))
 
 
-# In[82]:
+# In[9]:
 
 
 string_walks = [[str(n) for n in walk] for walk in weighted_walks]
 
 
-# In[83]:
+# In[10]:
 
 
 from gensim.models import Word2Vec
@@ -132,29 +132,29 @@ weighted_model = Word2Vec(
 
 # ### Embeddings
 
-# In[85]:
+# In[12]:
 
 
-#tsne = TSNE(n_components=2, random_state=42)
-#weighted_node_embeddings_2d = tsne.fit_transform(weighted_node_embeddings)
+tsne = TSNE(n_components=2, random_state=42)
+weighted_node_embeddings_2d = tsne.fit_transform(weighted_node_embeddings)
 
 # draw the points
-#alpha = 0.7
+alpha = 0.7
 
-#plt.figure(figsize=(10, 8))
-#plt.scatter(
-#    weighted_node_embeddings_2d[:, 0],
-#    weighted_node_embeddings_2d[:, 1],
-#    c=node_targets.cat.codes,
-#    cmap="jet",
-#    alpha=0.7,
-#)
-#plt.title(
-#    "visualization of node2vec embeddings for Discover dataset")
-#plt.show()
+plt.figure(figsize=(10, 8))
+plt.scatter(
+    weighted_node_embeddings_2d[:, 0],
+    weighted_node_embeddings_2d[:, 1],
+    c=node_targets.cat.codes,
+    cmap="jet",
+    alpha=0.7,
+)
+plt.title(
+    "visualization of node2vec embeddings for Discover dataset")
+plt.show()
 
 
-# In[84]:
+# In[11]:
 
 
 # Retrieve node embeddings and corresponding subjects
@@ -169,7 +169,7 @@ node_targets = labels.loc[int_ids].astype("category")
 
 # ### Adicionando ao neo4j
 
-# In[86]:
+# In[13]:
 
 
 pulling_query = """            MATCH (a)
@@ -184,18 +184,24 @@ with driver.session() as sess:
 
 # ### Retornando recomendações via python
 
-# In[87]:
+# In[14]:
 
 
 
 final_query = """
 MATCH (a:Blog),(b:Blog)
 WHERE ID(a) = 1055 AND ID(a) <> ID(b) AND EXISTS (b.embedding)
-RETURN DISTINCT a.title AS CLICK,a.label as FONTE, b.title AS RECOMENDACAO, b.label AS AREA, apoc.algo.cosineSimilarity(a.embedding,b.embedding) AS SIMILARIDADE ORDER BY SIMILARIDADE DESC
+RETURN DISTINCT a.title AS CLICK,a.label as FONTE, b.title AS RECOMENDACAO, b.label AS AREA, gds.alpha.similarity.cosine(a.embedding,b.embedding) AS SIMILARIDADE ORDER BY SIMILARIDADE DESC
 """
 with driver.session() as sess:
     result = sess.run(final_query)
     df_final = pd.DataFrame([dict(row) for row in result])
 print("----POSSÍVEIS LINKS----")
 print(df_final)
+
+
+# In[ ]:
+
+
+
 

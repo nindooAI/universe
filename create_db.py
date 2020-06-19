@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # # Discover DB
@@ -6,7 +6,7 @@
 
 # ## Imports e configurações iniciais
 
-# In[22]:
+# In[1]:
 
 
 import pandas as pd
@@ -19,7 +19,7 @@ import wikipedia
 
 # ## Env Variables
 
-# In[23]:
+# In[2]:
 
 
 url = 'https://spxa6xmc58.execute-api.us-west-2.amazonaws.com/prod/'
@@ -29,7 +29,7 @@ n4j_login = 'neo4j'
 
 # ## Data loading
 
-# In[24]:
+# In[3]:
 
 
 def get_crawler(url):
@@ -42,7 +42,7 @@ response = json.loads(get_crawler(url))
 
 # ## Descobrimento de dados
 
-# In[25]:
+# In[4]:
 
 
 #soma = 0
@@ -59,7 +59,7 @@ for element in response:
 
 # ## Conectando ao db
 
-# In[26]:
+# In[5]:
 
 
 driver = GraphDatabase.driver( "bolt://localhost:7687",  auth=basic_auth(n4j_login,n4j_pass))
@@ -68,7 +68,7 @@ sess = driver.session()
 
 # ### Interesses:
 
-# In[27]:
+# In[13]:
 
 
 with driver.session() as sess:
@@ -79,39 +79,39 @@ with driver.session() as sess:
                     SET a.label = $label
                     """, {"name":interest,"label":element['Label']})
             else:
-                sess.run("""                    MERGE (a:INTEREST {name: {name}})
+                sess.run("""                    MERGE (a:INTEREST {name: $name})
                     """, {"name":interest})
 
 
 # ## Artigos ligados à Interesses
 
-# In[28]:
+# In[16]:
 
 
 with driver.session() as sess:
     for element in response:
-        sess.run("""            MERGE (b:Text {title: {title}})
+        sess.run("""            MERGE (b:Text {title: $title})
             """, {"title":element['Title']})
 
 
-# In[29]:
+# In[17]:
 
 
 with driver.session() as sess:
     for element in response:
         for interest in element['Category']:
-            sess.run("""                MATCH (a:INTEREST {name: {name}}),(b:Text {title: {title}})
+            sess.run("""                MATCH (a:INTEREST {name: $name}),(b:Text {title: $title})
                 MERGE (b)-[r:BELONGS_TO]->(a)
                 """, {"name":interest, "title":element['Title']})
 
 
-# In[30]:
+# In[19]:
 
 
 with driver.session() as sess:
     for element in response:
-        sess.run("""                MATCH (b:Text {title: {title}})
-                SET b.link = {link}, b.image_url = {image_url}, b.description = {description},                    b.date = {pub_date}
+        sess.run("""                MATCH (b:Text {title: $title})
+                SET b.link = $link, b.image_url = $image_url, b.description = $description, b.date = $pub_date
                 SET b:Text:Blog
                 """, {"link":element['Link'],"image_url":element['image'],"pub_date":element['PubDate'],"description":element['Description'], "title":element['Title']})
 
@@ -120,20 +120,20 @@ with driver.session() as sess:
 
 # ### Conectando áreas similares
 
-# In[31]:
+# In[20]:
 
 
 with driver.session() as sess:
     for element in response:
         for interest in element['Category']:
             if len(element['Category']) != 1:    
-                sess.run("""                    MATCH (a:INTEREST {name: {name}}), (b:INTEREST {name: {other}}) 
+                sess.run("""                    MATCH (a:INTEREST {name: $name}), (b:INTEREST {name: $other}) 
                     WHERE NOT (a)-[:IS_RELATED]-(b) 
                     MERGE (a)-[:IS_RELATED]->(b)
                     """, {"name":element['Category'][0], "other":interest})
 
 
-# In[32]:
+# In[21]:
 
 
 ### Deletando ligações iguais
@@ -141,7 +141,7 @@ with driver.session() as sess:
     for element in response:
         for interest in element['Category']:
             if len(element['Category']) >=1:    
-                sess.run("""                    MATCH (a:INTEREST {name: {name}})-[r:IS_RELATED]->(b:INTEREST {name: {other}}) 
+                sess.run("""                    MATCH (a:INTEREST {name: $name})-[r:IS_RELATED]->(b:INTEREST {name: $other}) 
                     WHERE a.name = b.name
                     DELETE r
                     """, {"name":element['Category'][0], "other":interest})
@@ -149,27 +149,27 @@ with driver.session() as sess:
 
 # ### Adicionando Super-Labels
 
-# In[33]:
+# In[22]:
 
 
 with driver.session() as sess:
     for element in response:
         if 'Label' in element.keys():
-            sess.run("""                    MATCH (b:Text {title: {title}})
-                    SET b.label = {label}
+            sess.run("""                    MATCH (b:Text {title: $title})
+                    SET b.label = $label
                     """, {"label":element['Label'],"title":element['Title']})
 
 
 # ### Wikipedia
 
-# In[34]:
+# In[23]:
 
 
 with open('data/wiki.json','r') as fp:
     pre_dict = json.load(fp)
 
 
-# In[35]:
+# In[24]:
 
 
 lista = []
@@ -191,28 +191,34 @@ for element in interests:
         
 
 
-# In[36]:
+# In[25]:
 
 
 with open('data/wiki.json', 'w') as fp:
     json.dump(descriptions, fp)
 
 
-# In[37]:
+# In[26]:
 
 
 with driver.session() as sess:
     for element in descriptions.keys():
-        sess.run("""                MATCH (b:INTEREST {name: {name}})
-                SET b.description = {description}""", 
-                {"name":element,"description":descriptions[element]})
+        sess.run("""                MATCH (b:INTEREST {name: $name})
+                SET b.description = $description
+                """, {"name":element,"description":descriptions[element]})
     
 
 
-# In[38]:
+# In[27]:
 
 
 for key,value in descriptions.items():
     if value == 'Not Found':
         print(key)
+
+
+# In[ ]:
+
+
+
 
