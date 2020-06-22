@@ -110,8 +110,8 @@ with driver.session() as sess:
 with driver.session() as sess:
     for element in response:
         sess.run("""                MATCH (b:Text {title: $title})
-                ON CREATE SET b.link = $link, b.image_url = $image_url, b.description = $description, b.date = $pub_date
-                ON CREATE SET b:Text:Blog
+                SET b.link = $link, b.image_url = $image_url, b.description = $description, b.date = $pub_date
+                SET b:Text:Blog
                 """, {"link":element['Link'],"image_url":element['image'],"pub_date":element['PubDate'],"description":element['Description'], "title":element['Title']})
 
 
