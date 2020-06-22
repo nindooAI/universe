@@ -117,9 +117,10 @@ with driver.session() as sess:
 with driver.session() as sess:
     for element in response:
         for interest in element['Category']:
-            sess.run("""                MATCH (a:INTEREST {name: $name}),(b:Text {title: $title}),(c:AREA {name: $label})
+            sess.run("""                
+		MATCH (a:INTEREST {name: $name}),(b:Text {title: $title}),(c:AREA {name: $label})
                 MERGE (b)-[r:BELONGS_TO]->(a)
-                MERGE (b)-[r:BELONGS_TO]->(c)
+                MERGE (b)-[:BELONGS_TO]->(c)
                 """, {"name":interest, "title":element['Title'], "label":element['Label']})
 
 
