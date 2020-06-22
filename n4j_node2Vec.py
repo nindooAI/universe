@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # Preprocessing Discover Graph text data
+# # Pre-processando o banco de dados neo4j para alimentar algorítmo `node2vec` da stellargraph
 
-# In[1]:
+# In[ ]:
 
 
 from neo4j import GraphDatabase, basic_auth
@@ -19,7 +19,7 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
 
-# In[2]:
+# In[ ]:
 
 
 import networkx as nx
@@ -39,20 +39,14 @@ from stellargraph import datasets
 from IPython.display import display, HTML
 import matplotlib.pyplot as plt
 
-nltk.download('averaged_perceptron_tagger')
-
-
-# In[3]:
-
-
-driver = GraphDatabase.driver( "bolt://localhost:7687",  auth=basic_auth("neo4j", "nindoo123"))
+driver = GraphDatabase.driver( os.getenv('N4J_URL'),  auth=basic_auth(os.getenv('N4J_USER'), os.getenv('N4J_PASS')))
 
 
 # # Creating StellarGraph
 
 # ### Puxando Edges
 
-# In[4]:
+# In[ ]:
 
 
 pulling_query = """            MATCH (a)-->(b)
@@ -68,7 +62,7 @@ edges_db.head()
 
 # ### puxando labels
 
-# In[5]:
+# In[ ]:
 
 
 pulling_query = """            MATCH (a)
@@ -85,22 +79,19 @@ labels.head()
 
 # ### Criando grafo
 
-# In[6]:
+# In[ ]:
 
 
 graph = sg.StellarGraph(edges =  edges_db)
 print(graph.info())
 
 
-# In[7]:
+# ### Criando Random Walks e alimentando o algoritmo com strings dessas walks
 
+# In[ ]:
 
 
 walk_length = 100  # maximum/ length of a random walk to use throughout this noteboo
-
-
-# In[8]:
-
 
 rw = sg.data.BiasedRandomWalk(graph)
 weighted_walks = rw.run(
@@ -114,14 +105,10 @@ weighted_walks = rw.run(
 )
 print("Number of random walks: {}".format(len(weighted_walks)))
 
-
-# In[9]:
-
-
 string_walks = [[str(n) for n in walk] for walk in weighted_walks]
 
 
-# In[10]:
+# In[ ]:
 
 
 from gensim.models import Word2Vec
@@ -132,7 +119,20 @@ weighted_model = Word2Vec(
 
 # ### Embeddings
 
-# In[12]:
+# In[ ]:
+
+
+# Retrieve node embeddings and corresponding subjects
+node_ids = weighted_model.wv.index2word  # list of node IDs
+weighted_node_embeddings = (
+    weighted_model.wv.vectors
+)  # numpy.ndarray of size number of nodes times embeddings dimensionality
+# the gensim ordering may not match the StellarGraph one, so rearrange
+int_ids = [int(node) for node in node_ids]
+node_targets = labels.loc[int_ids].astype("category")
+
+
+# In[ ]:
 
 
 tsne = TSNE(n_components=2, random_state=42)
@@ -154,22 +154,9 @@ plt.title(
 plt.show()
 
 
-# In[11]:
-
-
-# Retrieve node embeddings and corresponding subjects
-node_ids = weighted_model.wv.index2word  # list of node IDs
-weighted_node_embeddings = (
-    weighted_model.wv.vectors
-)  # numpy.ndarray of size number of nodes times embeddings dimensionality
-# the gensim ordering may not match the StellarGraph one, so rearrange
-int_ids = [int(node) for node in node_ids]
-node_targets = labels.loc[int_ids].astype("category")
-
-
 # ### Adicionando ao neo4j
 
-# In[13]:
+# In[ ]:
 
 
 pulling_query = """            MATCH (a)
@@ -184,14 +171,14 @@ with driver.session() as sess:
 
 # ### Retornando recomendações via python
 
-# In[14]:
+# In[ ]:
 
 
 
 final_query = """
 MATCH (a:Blog),(b:Blog)
 WHERE ID(a) = 1055 AND ID(a) <> ID(b) AND EXISTS (b.embedding)
-RETURN DISTINCT a.title AS CLICK,a.label as FONTE, b.title AS RECOMENDACAO, b.label AS AREA, gds.alpha.similarity.cosine(a.embedding,b.embedding) AS SIMILARIDADE ORDER BY SIMILARIDADE DESC
+RETURN DISTINCT a.title AS CLICK,a.label as FONTE, b.title AS RECOMENDACAO, b.label AS AREA, gds.alpha.similarity.cosine(a.embedding,b.embedding) AS SIMILARIDADE ORDER BY SIMILARIDADE DESC LIMIT 15
 """
 with driver.session() as sess:
     result = sess.run(final_query)

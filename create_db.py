@@ -6,7 +6,7 @@
 
 # ## Imports e configurações iniciais
 
-# In[1]:
+# In[ ]:
 
 
 import pandas as pd
@@ -15,68 +15,64 @@ import requests
 import json
 from neo4j import GraphDatabase, basic_auth
 import wikipedia
-
-
-# ## Env Variables
-
-# In[2]:
-
-
-url = 'https://spxa6xmc58.execute-api.us-west-2.amazonaws.com/prod/'
-n4j_pass = "nindoo123"
-n4j_login = 'neo4j'
+import config
 
 
 # ## Data loading
+# 
+# Pega dados do crawler
 
-# In[3]:
+# In[ ]:
 
 
+print('Crawler')
 def get_crawler(url):
     response = requests.get(url)
-    
     return response.text
-response = json.loads(get_crawler(url))
-#print(response)
+
+response = json.loads(get_crawler(os.getenv('CRAWLER_URL')))
 
 
 # ## Descobrimento de dados
+# Descomentar para entender a estrutura
 
-# In[4]:
+# In[ ]:
 
 
-#soma = 0
-for element in response:
-    print(element.keys())
-    #print(element['Category'])
-    # print(element['Description'])
-    # print(element['Link'])
-    # print(element['PubDate'])
-    #print(element['Title'])
-    # print(element['image'])
-    break
+# soma = 0
+# for element in response:
+#     print(element.keys())
+#     print(element['Category'])
+#     print(element['Description'])
+#     print(element['Link'])
+#     print(element['PubDate'])
+#     print(element['Title'])
+#     print(element['image'])
+#     break
 
 
 # ## Conectando ao db
 
-# In[5]:
+# In[ ]:
 
 
-driver = GraphDatabase.driver( "bolt://localhost:7687",  auth=basic_auth(n4j_login,n4j_pass))
+driver = GraphDatabase.driver(os.getenv('N4J_URL'),  auth=basic_auth(os.getenv('N4J_USER'),os.getenv('N4J_PASS')))
 sess = driver.session()
 
 
 # ### Interesses:
+# Crio os nós de Interesses, se existir a label (crawler alterado), colcoar a label, se não, apenas criar nó de interesse
 
-# In[13]:
+# In[ ]:
 
 
+print('Interesses')
 with driver.session() as sess:
     for element in response:
         for interest in element['Category']:
             if 'Label' in element.keys():
                 sess.run("""                    MERGE (a:INTEREST {name: $name})
-                    SET a.label = $label
+                    ON CREATE SET a.label = $label
                     """, {"name":interest,"label":element['Label']})
             else:
                 sess.run("""                    MERGE (a:INTEREST {name: $name})
@@ -84,17 +80,20 @@ with driver.session() as sess:
 
 
 # ## Artigos ligados à Interesses
+# Primeiro crio os nós de artigos e depois conecto eles a cada nó de categoria desses. E adiciono as features de cada nó.
+# 
 
-# In[16]:
+# In[ ]:
 
 
+print('Artigos e interesses')
 with driver.session() as sess:
     for element in response:
         sess.run("""            MERGE (b:Text {title: $title})
             """, {"title":element['Title']})
 
 
-# In[17]:
+# In[ ]:
 
 
 with driver.session() as sess:
@@ -105,24 +104,26 @@ with driver.session() as sess:
                 """, {"name":interest, "title":element['Title']})
 
 
-# In[19]:
+# In[ ]:
 
 
 with driver.session() as sess:
     for element in response:
         sess.run("""                MATCH (b:Text {title: $title})
-                SET b.link = $link, b.image_url = $image_url, b.description = $description, b.date = $pub_date
-                SET b:Text:Blog
+                ON CREATE SET b.link = $link, b.image_url = $image_url, b.description = $description, b.date = $pub_date
+                ON CREATE SET b:Text:Blog
                 """, {"link":element['Link'],"image_url":element['image'],"pub_date":element['PubDate'],"description":element['Description'], "title":element['Title']})
 
 
 # ### Adicionando features aos artigos
 
 # ### Conectando áreas similares
+# SE mais de uma categoria aparece no artigo, gerar conexões entre elas. Como tive que iterar por todas, na outra célula apago os `self-loops`
 
-# In[20]:
+# In[ ]:
 
 
+print('Features')
 with driver.session() as sess:
     for element in response:
         for interest in element['Category']:
@@ -133,7 +134,7 @@ with driver.session() as sess:
                     """, {"name":element['Category'][0], "other":interest})
 
 
-# In[21]:
+# In[ ]:
 
 
 ### Deletando ligações iguais
@@ -148,10 +149,12 @@ with driver.session() as sess:
 
 
 # ### Adicionando Super-Labels
+# Agora com as `super-labels` adicionadas, crio a feature em cada nó de texto
 
-# In[22]:
+# In[ ]:
 
 
+print('Labels')
 with driver.session() as sess:
     for element in response:
         if 'Label' in element.keys():
@@ -161,15 +164,17 @@ with driver.session() as sess:
 
 
 # ### Wikipedia
+# Uso a api da wikipedia para gerar descrições nos nós de categorias, salvo o arquivo 'wiki.json' para não precisar fazer request denovo, eles são a parte mais demoradade desse código'
 
-# In[23]:
+# In[ ]:
 
 
+print('Wikipedia')
 with open('data/wiki.json','r') as fp:
     pre_dict = json.load(fp)
 
 
-# In[24]:
+# In[ ]:
 
 
 lista = []
@@ -191,14 +196,14 @@ for element in interests:
         
 
 
-# In[25]:
+# In[ ]:
 
 
 with open('data/wiki.json', 'w') as fp:
     json.dump(descriptions, fp)
 
 
-# In[26]:
+# In[ ]:
 
 
 with driver.session() as sess:
@@ -209,7 +214,8 @@ with driver.session() as sess:
     
 
 
-# In[27]:
+# In[ ]:
+
 
 
 for key,value in descriptions.items():
