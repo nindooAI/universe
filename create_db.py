@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # # Discover DB
@@ -60,8 +60,24 @@ driver = GraphDatabase.driver(os.getenv('N4J_URL'),  auth=basic_auth(os.getenv('
 sess = driver.session()
 
 
+# ### Super categorias
+# Criando nós de super categorias
+
+# In[ ]:
+
+
+print('Super categorias')
+with driver.session() as sess:
+    for element in response:
+        if 'Label' in element.keys():
+            sess.run("""                MERGE (a:AREA {name: $label})
+                """, {"label":element['Label']})
+
+
 # ### Interesses:
 # Crio os nós de Interesses, se existir a label (crawler alterado), colcoar a label, se não, apenas criar nó de interesse
+# 
+# #### atualizar depois de trnasicionar db
 
 # In[ ]:
 
@@ -71,15 +87,15 @@ with driver.session() as sess:
     for element in response:
         for interest in element['Category']:
             if 'Label' in element.keys():
-                sess.run("""                    MERGE (a:INTEREST {name: $name})
-                    SET a.label = $label
+                sess.run("""                    MATCH (b:AREA {name:$label})
+                    MERGE (a:INTEREST {name: $name})<-[r:INCLUDES]-(b)
                     """, {"name":interest,"label":element['Label']})
             else:
                 sess.run("""                    MERGE (a:INTEREST {name: $name})
                     """, {"name":interest})
 
 
-# ## Artigos ligados à Interesses
+# ## Artigos ligados à Interesses e areas
 # Primeiro crio os nós de artigos e depois conecto eles a cada nó de categoria desses. E adiciono as features de cada nó.
 # 
 
@@ -89,8 +105,10 @@ with driver.session() as sess:
 print('Artigos e interesses')
 with driver.session() as sess:
     for element in response:
-        sess.run("""            MERGE (b:Text {title: $title})
-            """, {"title":element['Title']})
+        sess.run("""            MERGE (b:Data:Text:Blog {title: $title})
+            SET b.link = $link, b.image_url = $image_url, b.description = $description, b.date = $pub_date
+            """, {"link":element['Link'],"image_url":element['image'],"pub_date":element['PubDate'],
+                  "description":element['Description'], "title":element['Title']})
 
 
 # In[ ]:
@@ -99,20 +117,22 @@ with driver.session() as sess:
 with driver.session() as sess:
     for element in response:
         for interest in element['Category']:
-            sess.run("""                MATCH (a:INTEREST {name: $name}),(b:Text {title: $title})
+            sess.run("""                MATCH (a:INTEREST {name: $name}),(b:Text {title: $title}),(c:AREA {name: $label})
                 MERGE (b)-[r:BELONGS_TO]->(a)
-                """, {"name":interest, "title":element['Title']})
+                MERGE (b)-[r:BELONGS_TO]->(c)
+                """, {"name":interest, "title":element['Title'], "label":element['Label']})
 
 
 # In[ ]:
 
 
-with driver.session() as sess:
-    for element in response:
-        sess.run("""                MATCH (b:Text {title: $title})
-                SET b.link = $link, b.image_url = $image_url, b.description = $description, b.date = $pub_date
-                SET b:Text:Blog
-                """, {"link":element['Link'],"image_url":element['image'],"pub_date":element['PubDate'],"description":element['Description'], "title":element['Title']})
+#     with driver.session() as sess:
+#         for element in response:
+#             sess.run("""\
+#                     MATCH (b:Text {title: $title})
+#                     SET b.link = $link, b.image_url = $image_url, b.description = $description, b.date = $pub_date
+#                     SET b:Text:Blog
+#                     """, {"link":element['Link'],"image_url":element['image'],"pub_date":element['PubDate'],"description":element['Description'], "title":element['Title']})
 
 
 # ### Adicionando features aos artigos
@@ -154,13 +174,14 @@ with driver.session() as sess:
 # In[ ]:
 
 
-print('Labels')
-with driver.session() as sess:
-    for element in response:
-        if 'Label' in element.keys():
-            sess.run("""                    MATCH (b:Text {title: $title})
-                    SET b.label = $label
-                    """, {"label":element['Label'],"title":element['Title']})
+# print('Labels')
+# with driver.session() as sess:
+#     for element in response:
+#         if 'Label' in element.keys():
+#             sess.run("""\
+#                     MATCH (b:Text {title: $title})
+#                     SET b.label = $label
+#                     """, {"label":element['Label'],"title":element['Title']})
 
 
 # ### Wikipedia
@@ -219,4 +240,10 @@ with driver.session() as sess:
 for key,value in descriptions.items():
     if value == 'Not Found':
         print(key)
+
+
+# In[ ]:
+
+
+
 
