@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+
 # coding: utf-8
 
 # # Pre-processando o banco de dados neo4j para alimentar algorítmo `node2vec` da stellargraph
@@ -49,6 +49,7 @@ driver = GraphDatabase.driver( os.getenv('N4J_URL'),  auth=basic_auth(os.getenv(
 # In[ ]:
 
 
+print('Preparando Dataset')
 pulling_query = """            MATCH (a)-->(b)
             WHERE EXISTS (a.label) AND EXISTS (b.label)
             RETURN ID(a) AS source, ID(b) AS target
@@ -82,6 +83,7 @@ labels.head()
 # In[ ]:
 
 
+print('Criando Grafo')
 graph = sg.StellarGraph(edges =  edges_db)
 print(graph.info())
 
@@ -91,6 +93,7 @@ print(graph.info())
 # In[ ]:
 
 
+print('RANDOM WALKS')
 walk_length = 100  # maximum/ length of a random walk to use throughout this noteboo
 
 rw = sg.data.BiasedRandomWalk(graph)
@@ -111,6 +114,7 @@ string_walks = [[str(n) for n in walk] for walk in weighted_walks]
 # In[ ]:
 
 
+print('Treino')
 from gensim.models import Word2Vec
 weighted_model = Word2Vec(
     string_walks, size=128, window=5, min_count=0, sg=1, workers=1, iter=1
@@ -122,6 +126,7 @@ weighted_model = Word2Vec(
 # In[ ]:
 
 
+print('Plot')
 # Retrieve node embeddings and corresponding subjects
 node_ids = weighted_model.wv.index2word  # list of node IDs
 weighted_node_embeddings = (
@@ -159,6 +164,7 @@ plt.show()
 # In[ ]:
 
 
+print('Adicionando embeddings')
 pulling_query = """            MATCH (a)
             WHERE  ID(a) = $id
             SET a.embedding = $emb
@@ -178,17 +184,11 @@ with driver.session() as sess:
 final_query = """
 MATCH (a:Blog),(b:Blog)
 WHERE ID(a) = 1055 AND ID(a) <> ID(b) AND EXISTS (b.embedding)
-RETURN DISTINCT a.title AS CLICK,a.label as FONTE, b.title AS RECOMENDACAO, b.label AS AREA, gds.alpha.similarity.cosine(a.embedding,b.embedding) AS SIMILARIDADE ORDER BY SIMILARIDADE DESC LIMIT 15
+RETURN DISTINCT a.title AS CLICK,a.label as FONTE, b.title AS RECOMENDACAO, b.label AS AREA, apoc.algo.cosineSimilarity(a.embedding,b.embedding) AS SIMILARIDADE ORDER BY SIMILARIDADE DESC LIMIT 15
 """
 with driver.session() as sess:
     result = sess.run(final_query)
     df_final = pd.DataFrame([dict(row) for row in result])
 print("----POSSÍVEIS LINKS----")
 print(df_final)
-
-
-# In[ ]:
-
-
-
 

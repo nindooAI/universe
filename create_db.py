@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+
 # coding: utf-8
 
 # # Discover DB
@@ -72,7 +72,7 @@ with driver.session() as sess:
         for interest in element['Category']:
             if 'Label' in element.keys():
                 sess.run("""                    MERGE (a:INTEREST {name: $name})
-                    ON CREATE SET a.label = $label
+                    SET a.label = $label
                     """, {"name":interest,"label":element['Label']})
             else:
                 sess.run("""                    MERGE (a:INTEREST {name: $name})
@@ -183,8 +183,6 @@ for element in response:
             if interest not in pre_dict.keys():
                 lista.append(interest)
 interests = set(lista)
-print(len(lista))
-print(len(interests))
 descriptions = pre_dict
 for element in interests:
     if element not in descriptions.keys():
@@ -221,10 +219,4 @@ with driver.session() as sess:
 for key,value in descriptions.items():
     if value == 'Not Found':
         print(key)
-
-
-# In[ ]:
-
-
-
 
