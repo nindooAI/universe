@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+
 # coding: utf-8
 
 # # Discover DB
@@ -6,7 +6,7 @@
 
 # ## Imports e configurações iniciais
 
-# In[ ]:
+# In[1]:
 
 
 import pandas as pd
@@ -22,7 +22,7 @@ import config
 # 
 # Pega dados do crawler
 
-# In[ ]:
+# In[33]:
 
 
 print('Crawler')
@@ -36,7 +36,7 @@ response = json.loads(get_crawler(os.getenv('CRAWLER_URL')))
 # ## Descobrimento de dados
 # Descomentar para entender a estrutura
 
-# In[ ]:
+# In[34]:
 
 
 # soma = 0
@@ -53,7 +53,7 @@ response = json.loads(get_crawler(os.getenv('CRAWLER_URL')))
 
 # ## Conectando ao db
 
-# In[ ]:
+# In[35]:
 
 
 driver = GraphDatabase.driver(os.getenv('N4J_URL'),  auth=basic_auth(os.getenv('N4J_USER'),os.getenv('N4J_PASS')))
@@ -63,7 +63,7 @@ sess = driver.session()
 # ### Super categorias
 # Criando nós de super categorias
 
-# In[ ]:
+# In[36]:
 
 
 print('Super categorias')
@@ -79,27 +79,22 @@ with driver.session() as sess:
 # 
 # #### atualizar depois de trnasicionar db
 
-# In[ ]:
+# In[37]:
 
 
 print('Interesses')
 with driver.session() as sess:
     for element in response:
         for interest in element['Category']:
-            if 'Label' in element.keys():
-                sess.run("""                    MATCH (b:AREA {name:$label})
-                    MERGE (a:INTEREST {name: $name})<-[r:INCLUDES]-(b)
-                    """, {"name":interest,"label":element['Label']})
-            else:
-                sess.run("""                    MERGE (a:INTEREST {name: $name})
-                    """, {"name":interest})
+            sess.run("""                MERGE (a:INTEREST {name: $name})
+                """, {"name":interest})
 
 
-# ## Artigos ligados à Interesses e areas
+# ## Artigos 
 # Primeiro crio os nós de artigos e depois conecto eles a cada nó de categoria desses. E adiciono as features de cada nó.
 # 
 
-# In[ ]:
+# In[38]:
 
 
 print('Artigos e interesses')
@@ -111,29 +106,24 @@ with driver.session() as sess:
                   "description":element['Description'], "title":element['Title']})
 
 
-# In[ ]:
+# ### Criando ligações entre nós:
+
+# In[39]:
 
 
 with driver.session() as sess:
     for element in response:
         for interest in element['Category']:
-            sess.run("""                
-		MATCH (a:INTEREST {name: $name}),(b:Text {title: $title}),(c:AREA {name: $label})
-                MERGE (b)-[r:BELONGS_TO]->(a)
-                MERGE (b)-[:BELONGS_TO]->(c)
-                """, {"name":interest, "title":element['Title'], "label":element['Label']})
-
-
-# In[ ]:
-
-
-#     with driver.session() as sess:
-#         for element in response:
-#             sess.run("""\
-#                     MATCH (b:Text {title: $title})
-#                     SET b.link = $link, b.image_url = $image_url, b.description = $description, b.date = $pub_date
-#                     SET b:Text:Blog
-#                     """, {"link":element['Link'],"image_url":element['image'],"pub_date":element['PubDate'],"description":element['Description'], "title":element['Title']})
+            if 'Label' in element.keys():
+                sess.run("""                    MATCH (a:INTEREST {name: $name}),(b:Text {title: $title}),(c:AREA {name: $label})
+                    MERGE (b)-[r:BELONGS_TO]->(a)
+                    MERGE (b)-[:BELONGS_TO]->(c)
+                    MERGE (a)<-[:INCLUDES]-(c)
+                    """, {"name":interest, "title":element['Title'], "label":element['Label']})
+            else:
+                sess.run("""                    MATCH (a:INTEREST {name: $name}),(b:Text {title: $title})
+                    MERGE (b)-[r:BELONGS_TO]->(a)
+                    """, {"name":interest, "title":element['Title']})
 
 
 # ### Adicionando features aos artigos
@@ -141,7 +131,7 @@ with driver.session() as sess:
 # ### Conectando áreas similares
 # SE mais de uma categoria aparece no artigo, gerar conexões entre elas. Como tive que iterar por todas, na outra célula apago os `self-loops`
 
-# In[ ]:
+# In[41]:
 
 
 print('Features')
@@ -155,7 +145,7 @@ with driver.session() as sess:
                     """, {"name":element['Category'][0], "other":interest})
 
 
-# In[ ]:
+# In[42]:
 
 
 ### Deletando ligações iguais
@@ -169,26 +159,10 @@ with driver.session() as sess:
                     """, {"name":element['Category'][0], "other":interest})
 
 
-# ### Adicionando Super-Labels
-# Agora com as `super-labels` adicionadas, crio a feature em cada nó de texto
-
-# In[ ]:
-
-
-# print('Labels')
-# with driver.session() as sess:
-#     for element in response:
-#         if 'Label' in element.keys():
-#             sess.run("""\
-#                     MATCH (b:Text {title: $title})
-#                     SET b.label = $label
-#                     """, {"label":element['Label'],"title":element['Title']})
-
-
 # ### Wikipedia
 # Uso a api da wikipedia para gerar descrições nos nós de categorias, salvo o arquivo 'wiki.json' para não precisar fazer request denovo, eles são a parte mais demoradade desse código'
 
-# In[ ]:
+# In[44]:
 
 
 print('Wikipedia')
@@ -196,7 +170,7 @@ with open('data/wiki.json','r') as fp:
     pre_dict = json.load(fp)
 
 
-# In[ ]:
+# In[45]:
 
 
 lista = []
@@ -216,14 +190,14 @@ for element in interests:
         
 
 
-# In[ ]:
+# In[46]:
 
 
 with open('data/wiki.json', 'w') as fp:
     json.dump(descriptions, fp)
 
 
-# In[ ]:
+# In[47]:
 
 
 with driver.session() as sess:
@@ -234,17 +208,11 @@ with driver.session() as sess:
     
 
 
-# In[ ]:
+# In[48]:
 
 
 
-for key,value in descriptions.items():
-    if value == 'Not Found':
-        print(key)
-
-
-# In[ ]:
-
-
-
+# for key,value in descriptions.items():
+#     if value == 'Not Found':
+#         print(key)
 

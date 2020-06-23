@@ -3,7 +3,7 @@
 
 # # Pre-processando o banco de dados neo4j para alimentar algorítmo `node2vec` da stellargraph
 
-# In[ ]:
+# In[1]:
 
 
 from neo4j import GraphDatabase, basic_auth
@@ -19,7 +19,7 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
 
-# In[ ]:
+# In[2]:
 
 
 import networkx as nx
@@ -46,12 +46,11 @@ driver = GraphDatabase.driver( os.getenv('N4J_URL'),  auth=basic_auth(os.getenv(
 
 # ### Puxando Edges
 
-# In[ ]:
+# In[3]:
 
 
 print('Preparando Dataset')
 pulling_query = """            MATCH (a)-->(b)
-            WHERE EXISTS (a.label) AND EXISTS (b.label)
             RETURN ID(a) AS source, ID(b) AS target
             """
 with driver.session() as sess:
@@ -63,24 +62,25 @@ edges_db.head()
 
 # ### puxando labels
 
-# In[ ]:
+# In[4]:
 
 
-pulling_query = """            MATCH (a)
-            WHERE EXISTS (a.label)
-            RETURN ID(a) AS source, a.label AS subject
-            """
-with driver.session() as sess:
-    result = sess.run(pulling_query)
-    label_db = pd.DataFrame([dict(row) for row in result])
-labels = pd.Series(data =label_db['subject'].values, index = label_db['source'].values)
-print(labels.shape)
-labels.head()
+# pulling_query = """\
+#             MATCH (a)
+#             WHERE EXISTS (a.label)
+#             RETURN ID(a) AS source, a.label AS subject
+#             """
+# with driver.session() as sess:
+#     result = sess.run(pulling_query)
+#     label_db = pd.DataFrame([dict(row) for row in result])
+# labels = pd.Series(data =label_db['subject'].values, index = label_db['source'].values)
+# print(labels.shape)
+# labels.head()
 
 
 # ### Criando grafo
 
-# In[ ]:
+# In[5]:
 
 
 print('Criando Grafo')
@@ -90,11 +90,14 @@ print(graph.info())
 
 # ### Criando Random Walks e alimentando o algoritmo com strings dessas walks
 
-# In[ ]:
+# In[7]:
 
 
+import time
+
+start = time.time()
 print('RANDOM WALKS')
-walk_length = 100  # maximum/ length of a random walk to use throughout this noteboo
+walk_length = 50  # maximum/ length of a random walk to use throughout this noteboo
 
 rw = sg.data.BiasedRandomWalk(graph)
 weighted_walks = rw.run(
@@ -109,9 +112,11 @@ weighted_walks = rw.run(
 print("Number of random walks: {}".format(len(weighted_walks)))
 
 string_walks = [[str(n) for n in walk] for walk in weighted_walks]
+end = time.time()
+print('TEMPO PARA GERAR RWs',end - start)
 
 
-# In[ ]:
+# In[8]:
 
 
 print('Treino')
@@ -123,7 +128,7 @@ weighted_model = Word2Vec(
 
 # ### Embeddings
 
-# In[ ]:
+# In[9]:
 
 
 print('Plot')
@@ -134,34 +139,35 @@ weighted_node_embeddings = (
 )  # numpy.ndarray of size number of nodes times embeddings dimensionality
 # the gensim ordering may not match the StellarGraph one, so rearrange
 int_ids = [int(node) for node in node_ids]
-node_targets = labels.loc[int_ids].astype("category")
 
 
-# In[ ]:
+
+# In[10]:
 
 
-tsne = TSNE(n_components=2, random_state=42)
-weighted_node_embeddings_2d = tsne.fit_transform(weighted_node_embeddings)
+# node_targets = labels.loc[int_ids].astype("category")
+# tsne = TSNE(n_components=2, random_state=42)
+# weighted_node_embeddings_2d = tsne.fit_transform(weighted_node_embeddings)
 
-# draw the points
-alpha = 0.7
+# # draw the points
+# alpha = 0.7
 
-plt.figure(figsize=(10, 8))
-plt.scatter(
-    weighted_node_embeddings_2d[:, 0],
-    weighted_node_embeddings_2d[:, 1],
-    c=node_targets.cat.codes,
-    cmap="jet",
-    alpha=0.7,
-)
-plt.title(
-    "visualization of node2vec embeddings for Discover dataset")
-plt.show()
+# plt.figure(figsize=(10, 8))
+# plt.scatter(
+#     weighted_node_embeddings_2d[:, 0],
+#     weighted_node_embeddings_2d[:, 1],
+#     c=node_targets.cat.codes,
+#     cmap="jet",
+#     alpha=0.7,
+# )
+# plt.title(
+#     "visualization of node2vec embeddings for Discover dataset")
+# plt.show()
 
 
 # ### Adicionando ao neo4j
 
-# In[ ]:
+# In[11]:
 
 
 print('Adicionando embeddings')
@@ -177,13 +183,13 @@ with driver.session() as sess:
 
 # ### Retornando recomendações via python
 
-# In[ ]:
+# In[15]:
 
 
 
 final_query = """
 MATCH (a:Blog),(b:Blog)
-WHERE ID(a) = 1055 AND ID(a) <> ID(b) AND EXISTS (b.embedding)
+WHERE ID(a) = 6331 AND ID(a) <> ID(b) AND EXISTS (b.embedding)
 RETURN DISTINCT a.title AS CLICK,a.label as FONTE, b.title AS RECOMENDACAO, b.label AS AREA, apoc.algo.cosineSimilarity(a.embedding,b.embedding) AS SIMILARIDADE ORDER BY SIMILARIDADE DESC LIMIT 15
 """
 with driver.session() as sess:
