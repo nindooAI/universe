@@ -113,7 +113,7 @@ import time
 
 start = time.time()
 print('RANDOM WALKS')
-walk_length = 20  # maximum/ length of a random walk to use throughout this noteboo
+walk_length = 50  # maximum/ length of a random walk to use throughout this noteboo
 
 rw = sg.data.BiasedRandomWalk(graph)
 weighted_walks = rw.run(
