@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # # Pre-processando o banco de dados neo4j para alimentar algorítmo `node2vec` da stellargraph
@@ -62,25 +62,41 @@ edges_db.head()
 
 # ### puxando labels
 
-# In[4]:
+# In[64]:
 
 
-# pulling_query = """\
-#             MATCH (a)
-#             WHERE EXISTS (a.label)
-#             RETURN ID(a) AS source, a.label AS subject
-#             """
-# with driver.session() as sess:
-#     result = sess.run(pulling_query)
-#     label_db = pd.DataFrame([dict(row) for row in result])
-# labels = pd.Series(data =label_db['subject'].values, index = label_db['source'].values)
-# print(labels.shape)
-# labels.head()
+pulling_query = """                MATCH (a)-[*1]-(b:AREA)
+                RETURN ID(a) AS source, b.name AS subject
+            """
+with driver.session() as sess:
+    result = sess.run(pulling_query)
+    label_db = pd.DataFrame([dict(row) for row in result])
+#labels.drop_duplicates(subset='source', keep='first')
+
+print(label_db.shape)
+duplicated = label_db['source'].duplicated()
+print(duplicated.value_counts())
+duplicated_index = duplicated[duplicated == True].index
+print(duplicated_index)
+label_db = label_db[label_db['source'].duplicated()]
+labels = pd.Series(data =label_db['subject'].values, index = label_db['source'].values)
+print(label_db.shape)
+labels.head()
+
+
+# In[12]:
+
+
+
+# no_label_db = pd.DataFrame([dict(row) for row in result])
+# no_labels = pd.Series(data =no_label_db['subject'].values, index = no_label_db['source'].values)
+# print(no_labels.shape)
+# no_labels.head()
 
 
 # ### Criando grafo
 
-# In[5]:
+# In[30]:
 
 
 print('Criando Grafo')
@@ -90,14 +106,14 @@ print(graph.info())
 
 # ### Criando Random Walks e alimentando o algoritmo com strings dessas walks
 
-# In[7]:
+# In[32]:
 
 
 import time
 
 start = time.time()
 print('RANDOM WALKS')
-walk_length = 50  # maximum/ length of a random walk to use throughout this noteboo
+walk_length = 20  # maximum/ length of a random walk to use throughout this noteboo
 
 rw = sg.data.BiasedRandomWalk(graph)
 weighted_walks = rw.run(
@@ -116,7 +132,7 @@ end = time.time()
 print('TEMPO PARA GERAR RWs',end - start)
 
 
-# In[8]:
+# In[33]:
 
 
 print('Treino')
@@ -128,7 +144,7 @@ weighted_model = Word2Vec(
 
 # ### Embeddings
 
-# In[9]:
+# In[34]:
 
 
 print('Plot')
@@ -141,28 +157,27 @@ weighted_node_embeddings = (
 int_ids = [int(node) for node in node_ids]
 
 
+# In[36]:
 
-# In[10]:
 
+#node_targets = labels.loc[int_ids].astype("category")
+tsne = TSNE(n_components=2, random_state=42)
+weighted_node_embeddings_2d = tsne.fit_transform(weighted_node_embeddings)
 
-# node_targets = labels.loc[int_ids].astype("category")
-# tsne = TSNE(n_components=2, random_state=42)
-# weighted_node_embeddings_2d = tsne.fit_transform(weighted_node_embeddings)
+# draw the points
+alpha = 0.7
 
-# # draw the points
-# alpha = 0.7
-
-# plt.figure(figsize=(10, 8))
-# plt.scatter(
-#     weighted_node_embeddings_2d[:, 0],
-#     weighted_node_embeddings_2d[:, 1],
-#     c=node_targets.cat.codes,
-#     cmap="jet",
-#     alpha=0.7,
-# )
-# plt.title(
-#     "visualization of node2vec embeddings for Discover dataset")
-# plt.show()
+plt.figure(figsize=(10, 8))
+plt.scatter(
+    weighted_node_embeddings_2d[:, 0],
+    weighted_node_embeddings_2d[:, 1],
+    #c=node_targets.cat.codes,
+    cmap="jet",
+    alpha=0.7,
+)
+plt.title(
+    "visualization of node2vec embeddings for Discover dataset")
+plt.show()
 
 
 # ### Adicionando ao neo4j
@@ -197,4 +212,10 @@ with driver.session() as sess:
     df_final = pd.DataFrame([dict(row) for row in result])
 print("----POSSÍVEIS LINKS----")
 print(df_final)
+
+
+# In[ ]:
+
+
+
 

@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # # Discover DB
@@ -100,8 +100,8 @@ with driver.session() as sess:
 print('Artigos e interesses')
 with driver.session() as sess:
     for element in response:
-        sess.run("""            MERGE (b:Data:Text:Blog {title: $title})
-            SET b.link = $link, b.image_url = $image_url, b.description = $description, b.date = $pub_date
+        sess.run("""            MERGE (b:Data:Text:Blog {title: $link})
+            ON CREATE SET b.link = $link, b.image_url = $image_url, b.description = $description, b.date = $pub_date
             """, {"link":element['Link'],"image_url":element['image'],"pub_date":element['PubDate'],
                   "description":element['Description'], "title":element['Title']})
 
@@ -126,15 +126,12 @@ with driver.session() as sess:
                     """, {"name":interest, "title":element['Title']})
 
 
-# ### Adicionando features aos artigos
-
 # ### Conectando áreas similares
 # SE mais de uma categoria aparece no artigo, gerar conexões entre elas. Como tive que iterar por todas, na outra célula apago os `self-loops`
 
 # In[41]:
 
 
-print('Features')
 with driver.session() as sess:
     for element in response:
         for interest in element['Category']:
@@ -215,4 +212,10 @@ with driver.session() as sess:
 # for key,value in descriptions.items():
 #     if value == 'Not Found':
 #         print(key)
+
+
+# In[ ]:
+
+
+
 
