@@ -1,5 +1,7 @@
 jupyter
 nltk
+fastapi
+uvicorn
 stellargraph 
 neo4j
 docker
