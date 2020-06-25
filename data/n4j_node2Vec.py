@@ -3,7 +3,7 @@
 
 # # Pre-processando o banco de dados neo4j para alimentar algorítmo `node2vec` da stellargraph
 
-# In[1]:
+# In[ ]:
 
 
 from neo4j import GraphDatabase, basic_auth
@@ -18,8 +18,7 @@ import nltk
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
-
-# In[2]:
+# In[ ]:
 
 
 import networkx as nx
@@ -46,7 +45,7 @@ driver = GraphDatabase.driver( os.getenv('N4J_URL'),  auth=basic_auth(os.getenv(
 
 # ### Puxando Edges
 
-# In[3]:
+# In[ ]:
 
 
 print('Preparando Dataset')
@@ -62,29 +61,30 @@ edges_db.head()
 
 # ### puxando labels
 
-# In[64]:
+# In[ ]:
 
 
-pulling_query = """                MATCH (a)-[*1]-(b:AREA)
-                RETURN ID(a) AS source, b.name AS subject
-            """
-with driver.session() as sess:
-    result = sess.run(pulling_query)
-    label_db = pd.DataFrame([dict(row) for row in result])
-#labels.drop_duplicates(subset='source', keep='first')
+# pulling_query = """\
+#                 MATCH (a)-[*1]-(b:AREA)
+#                 RETURN ID(a) AS source, b.name AS subject
+#             """
+# with driver.session() as sess:
+#     result = sess.run(pulling_query)
+#     label_db = pd.DataFrame([dict(row) for row in result])
+# #labels.drop_duplicates(subset='source', keep='first')
 
-print(label_db.shape)
-duplicated = label_db['source'].duplicated()
-print(duplicated.value_counts())
-duplicated_index = duplicated[duplicated == True].index
-print(duplicated_index)
-label_db = label_db[label_db['source'].duplicated()]
-labels = pd.Series(data =label_db['subject'].values, index = label_db['source'].values)
-print(label_db.shape)
-labels.head()
+# print(label_db.shape)
+# duplicated = label_db['source'].duplicated()
+# print(duplicated.value_counts())
+# duplicated_index = duplicated[duplicated == True].index
+# print(duplicated_index)
+# label_db = label_db[label_db['source'].duplicated()]
+# labels = pd.Series(data =label_db['subject'].values, index = label_db['source'].values)
+# print(label_db.shape)
+# labels.head()
 
 
-# In[12]:
+# In[ ]:
 
 
 
@@ -96,7 +96,7 @@ labels.head()
 
 # ### Criando grafo
 
-# In[30]:
+# In[ ]:
 
 
 print('Criando Grafo')
@@ -106,7 +106,7 @@ print(graph.info())
 
 # ### Criando Random Walks e alimentando o algoritmo com strings dessas walks
 
-# In[32]:
+# In[ ]:
 
 
 import time
@@ -132,7 +132,7 @@ end = time.time()
 print('TEMPO PARA GERAR RWs',end - start)
 
 
-# In[33]:
+# In[ ]:
 
 
 print('Treino')
@@ -140,11 +140,12 @@ from gensim.models import Word2Vec
 weighted_model = Word2Vec(
     string_walks, size=128, window=5, min_count=0, sg=1, workers=1, iter=1
 )
+weighted_model.save("../data/word2vec.model")
 
 
 # ### Embeddings
 
-# In[34]:
+# In[ ]:
 
 
 print('Plot')
@@ -157,7 +158,7 @@ weighted_node_embeddings = (
 int_ids = [int(node) for node in node_ids]
 
 
-# In[36]:
+# In[ ]:
 
 
 #node_targets = labels.loc[int_ids].astype("category")
@@ -182,7 +183,7 @@ plt.show()
 
 # ### Adicionando ao neo4j
 
-# In[11]:
+# In[ ]:
 
 
 print('Adicionando embeddings')
@@ -198,13 +199,13 @@ with driver.session() as sess:
 
 # ### Retornando recomendações via python
 
-# In[15]:
+# In[ ]:
 
 
 
 final_query = """
 MATCH (a:Blog),(b:Blog)
-WHERE ID(a) = 6331 AND ID(a) <> ID(b) AND EXISTS (b.embedding)
+WHERE ID(a) = 10000 AND ID(a) <> ID(b) AND EXISTS (b.embedding)
 RETURN DISTINCT a.title AS CLICK,a.label as FONTE, b.title AS RECOMENDACAO, b.label AS AREA, apoc.algo.cosineSimilarity(a.embedding,b.embedding) AS SIMILARIDADE ORDER BY SIMILARIDADE DESC LIMIT 15
 """
 with driver.session() as sess:

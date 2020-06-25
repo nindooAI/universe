@@ -113,15 +113,15 @@ with driver.session() as sess:
     for element in response:
         for interest in element['Category']:
             if 'Label' in element.keys():
-                sess.run("""                    MATCH (a:INTEREST {name: $name}),(b:Text {title: $title}),(c:AREA {name: $label})
+                sess.run("""                    MATCH (a:INTEREST {name: $name}),(b:Text {link: $link}),(c:AREA {name: $label})
                     MERGE (b)-[r:BELONGS_TO]->(a)
                     MERGE (b)-[:BELONGS_TO]->(c)
                     MERGE (a)<-[:INCLUDES]-(c)
-                    """, {"name":interest, "title":element['Title'], "label":element['Label']})
+                    """, {"name":interest, "link":element['Link'], "label":element['Label']})
             else:
-                sess.run("""                    MATCH (a:INTEREST {name: $name}),(b:Text {title: $title})
+                sess.run("""                    MATCH (a:INTEREST {name: $name}),(b:Text {link: $link})
                     MERGE (b)-[r:BELONGS_TO]->(a)
-                    """, {"name":interest, "title":element['Title']})
+                    """, {"name":interest, "link":element['Link']})
 
 
 # ### Conectando áreas similares
@@ -163,6 +163,12 @@ with driver.session() as sess:
 print('Wikipedia')
 with open('data/wiki.json','r') as fp:
     pre_dict = json.load(fp)
+
+
+# In[ ]:
+
+
+
 
 
 # In[ ]:
