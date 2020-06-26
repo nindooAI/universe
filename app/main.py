@@ -1,11 +1,13 @@
 import uvicorn
-from fastpai import FastAPI
-import data.create_db 
-import data.n4j_node2Vec 
-from loguro import logger
+from fastapi import FastAPI
+from data.create_db import populate_db
+import data.n4j_node2Vec as n4j
+from loguru import logger
+import os
+import pandas as pd
 
 # Iniciando a instancia da API
-app = FastAPI(title='Universe API', version='0.1,
+app = FastAPI(title='Universe API', version='0.1',
                 description='API com diversas funcoes do nindoo universe')
 
 # Iniciando logs
@@ -22,7 +24,7 @@ def read_status():
     :return: Dicionario com chave 'message' e estado da api
     """
     logger.debug('Usuario verificou estado da API')
-    return {'message': 'Universe de ON!'}
+    return {'message': 'Universe ON!'}
 
 
 @app.post('/update_db')
@@ -33,32 +35,31 @@ def update_db():
     """
 
     logger.info('Banco de dados sendo atualizado.')
-    update_db.run()
+    populate_db()
     logger.debug('Erro ao enviar embeddings para neo4j')
     retrain()
-    
 @app.post('/retrain')
 def retrain():
     """
     Retrain the model to update embeddings on neo4j.
     """
     logger.info('Retreinando o modelo')
-    data = n4j_node2Vec.pre_process()
+    data = n4j.pre_process()
     logger.debug('Erro ao preprocessar dados')
 
     logger.info('Iniciando treino')
-    n4j_node2Vec.train(data)
+    n4j.train(data)
     logger.debug('Erro ao treinar')
 
     logger.info('Enviando embeddings para neo4j')
-    n4j_node2Vec.update_emb()
+    n4j.update_emb()
     logger.debug('Erro em atualizar o DB')
 
 @app.post('/emb')
 @logger.catch()
 # gera emedding e deolve para o banco
 def get_emb(user_id):
-    n4j_node2Vec.get_emb(user_id)
+    n4j.gen_emb(user_id)
     return { 'message': True}
 
 

@@ -2,6 +2,6 @@
 .vscode/
 .ipynb_checkpoints/
 ./logs
-./notebooks
+./notebooks/
 ./scripts
-./__pycache__
+./__pycache__/
