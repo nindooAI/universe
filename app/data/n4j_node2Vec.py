@@ -80,14 +80,14 @@ def train(string_walks):
     weighted_model = Word2Vec(
         string_walks, size=128, window=5, min_count=0, sg=1, workers=1, iter=1
     )
-    weighted_model.save("./word2vec.model")
+    weighted_model.save("./data/word2vec.model")
 
 
 ### Embeddings
 
 @logger.catch
 def update_emb():
-    weighted_model = Word2Vec.load('./word2vec.model')
+    weighted_model = Word2Vec.load('./data/word2vec.model')
     print('Plot')
     # Retrieve node embeddings and corresponding subjects
     node_ids = weighted_model.wv.index2word  # list of node IDs
@@ -116,14 +116,14 @@ def gen_emb(nodeids):
                 return collect(b.embbedding)
                 """
     with driver.session() as sess:
-        array = sess.run(set_query,{"id":nodeids})
+        array = sess.run(pulling_query,{"id":nodeids})
     
     mean = np.mean(array, axis=0)
     
     set_query = """        
                 MATCH (a)
-                WHERE  ID(a) = $id
+                WHERE  ID(a) = $id AND NOT a.embbedding
                 SET a.embedding = $mean
                 """
     with driver.session() as sess:
-        array = sess.run(pulling_query,{"id":nodeids, "mean": mean})
+        array = sess.run(set_query,{"id":nodeids, "mean": mean})

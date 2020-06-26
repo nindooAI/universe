@@ -36,7 +36,7 @@ def update_db():
 
     logger.info('Banco de dados sendo atualizado.')
     populate_db()
-    logger.debug('Erro ao enviar embeddings para neo4j')
+    #logger.debug('Erro ao enviar embeddings para neo4j')
     retrain()
 @app.post('/retrain')
 def retrain():
@@ -45,23 +45,25 @@ def retrain():
     """
     logger.info('Retreinando o modelo')
     data = n4j.pre_process()
-    logger.debug('Erro ao preprocessar dados')
+    #logger.debug('Erro ao preprocessar dados')
 
     logger.info('Iniciando treino')
     n4j.train(data)
-    logger.debug('Erro ao treinar')
+    #logger.debug('Erro ao treinar')
 
     logger.info('Enviando embeddings para neo4j')
     n4j.update_emb()
-    logger.debug('Erro em atualizar o DB')
+    #logger.debug('Erro em atualizar o DB')
 
 @app.post('/emb')
 @logger.catch()
 # gera emedding e deolve para o banco
 def get_emb(user_id):
-    n4j.gen_emb(user_id)
-    return { 'message': True}
-
+    try:
+        n4j.gen_emb(user_id)
+        return { 'message': True}
+    except:
+        return Exception
 
 if __name__ == "__main__":
     # Run app with uvicorn with port and host specified. Host needed for docker port mapping

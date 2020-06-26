@@ -1,10 +1,9 @@
 jupyter
-nltk
 fastapi
 uvicorn
 stellargraph 
 neo4j
+loguru
 docker
 tensorflow-serving-api
-spacy
 wikipedia
