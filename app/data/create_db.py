@@ -94,7 +94,7 @@ def populate_db():
     with driver.session() as sess:
         for element in response:
             sess.run("""            MERGE (b:Data:Text:Blog {link: $link})
-                ON CREATE SET b.link = $link, b.image_url = $image_url, b.description = $description, b.date = $pub_date
+                SET b.link = $link, b.image_url = $image_url, b.description = $description, b.date = $pub_date, b.title = $title
                 """, {"link":element['Link'],"image_url":element['image'],"pub_date":element['PubDate'],
                     "description":element['Description'], "title":element['Title']})
 
