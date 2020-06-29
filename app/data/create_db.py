@@ -108,11 +108,26 @@ def populate_db():
             except:
                     pass         
 
-    # ### Criando ligações entre nós:
-
+    ### Limpando artigos repetidos
+    with driver.session() as sess:
+        sess.run( """
+        MATCH (a:Blog),(b:Blog)
+        WHERE toLower(a.link) <> tolower(b.link) AND id(a) <> id(b) AND tolower(a.title) = tolower(b.title)
+        with collect(b) as nodes
+        foreach (node in nodes | detach delete node)
+        """
+        )
+    with driver.session() as sess:
+        sess.run( """
+        MATCH (a:Blog),(b:Blog)
+        WHERE toLower(a.title) = tolower(b.title) AND id(a) <> id(b)
+        with collect(b) as nodes
+        foreach (node in nodes | detach delete node)
+        """
+        )
     # In[ ]:
 
-
+    # ### Criando ligações entre nós:
     with driver.session() as sess:
         for element in response:
             for interest in element['Category']:
