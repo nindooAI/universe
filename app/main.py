@@ -38,10 +38,11 @@ def update_db():
     try:
         populate_db()
     except:
-        return
-    #logger.debug('Erro ao enviar embeddings para neo4j')
+        return {"message", "Erro ao atualizar o banco de dados"}
     retrain()
+
 @app.post('/retrain')
+@logger.catch()
 def retrain():
     """
     Retrain the model to update embeddings on neo4j.
@@ -57,6 +58,7 @@ def retrain():
     logger.info('Enviando embeddings para neo4j')
     n4j.update_emb()
     #logger.debug('Erro em atualizar o DB')
+
 
 @app.post('/emb')
 @logger.catch()
