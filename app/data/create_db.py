@@ -97,14 +97,16 @@ def populate_db():
     # In[ ]:
 
 
-    print('Artigos e interesses')
+    print('Artigos')
     with driver.session() as sess:
         for element in response:
-            sess.run("""            MERGE (b:Data:Text:Blog {link: $link})
-                SET b.link = $link, b.image_url = $image_url, b.description = $description, b.date = $pub_date, b.title = $title
-                """, {"link":element['Link'],"image_url":element['image'],"pub_date":element['PubDate'],
-                    "description":element['Description'], "title":element['Title']})
-
+            try:
+                sess.run("""MERGE (b:Data:Text:Blog {link: $link})
+                    SET b.link = $link, b.image_url = $image_url, b.description = $description, b.date = $pub_date, b.title = $title
+                    """, {"link":element['Link'],"image_url":element['image'],"pub_date":element['PubDate'],
+                        "description":element['Description'], "title":element['Title']})
+            except:
+                    pass         
 
     # ### Criando ligações entre nós:
 

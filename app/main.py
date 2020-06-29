@@ -12,7 +12,7 @@ app = FastAPI(title='Universe API', version='0.1',
 
 # Iniciando logs
 log_format = "{time} | {level} | {message} | {file} | {line} | {function} | {exception}"
-logger.add(sink='app/data/log_files/logs.log', format=log_format, level='DEBUG', compression='zip')
+logger.add(sink='app/data/log_files/logs.log',backtrace = True, format=log_format, level='DEBUG')
 
 # Home da API
 @app.get('/')
@@ -35,7 +35,10 @@ def update_db():
     """
 
     logger.info('Banco de dados sendo atualizado.')
-    populate_db()
+    try:
+        populate_db()
+    except:
+        return
     #logger.debug('Erro ao enviar embeddings para neo4j')
     retrain()
 @app.post('/retrain')
