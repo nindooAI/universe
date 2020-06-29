@@ -44,10 +44,17 @@ def populate_db():
     #     print(element['image'])
     #     break
 
+    # Criando nó da fonte
 
-    # ## Conectando ao db
 
-    # In[ ]:
+    source = 'Medium'
+
+    print(source)
+
+    with driver.session() as sess:
+        sess.run("""
+               MERGE (a:Source {name:$source})
+                    """,{"source": source})
 
 
     
@@ -108,11 +115,12 @@ def populate_db():
         for element in response:
             for interest in element['Category']:
                 if 'Label' in element.keys():
-                    sess.run("""                    MATCH (a:INTEREST {name: $name}),(b:Text {link: $link}),(c:AREA {name: $label})
+                    sess.run("""                    MATCH (a:INTEREST {name: $name}),(b:Text {link: $link}),(c:AREA {name: $label}, (d:Source {name: $source}))
                         MERGE (b)-[r:BELONGS_TO]->(a)
                         MERGE (b)-[:BELONGS_TO]->(c)
                         MERGE (a)<-[:INCLUDES]-(c)
-                        """, {"name":interest, "link":element['Link'], "label":element['Label']})
+                        MERGE (b)-[:IS_FROM]->(d)
+                        """, {"name":interest, "link":element['Link'], "label":element['Label'],"source": source})
                 else:
                     sess.run("""                    MATCH (a:INTEREST {name: $name}),(b:Text {link: $link})
                         MERGE (b)-[r:BELONGS_TO]->(a)
@@ -147,6 +155,7 @@ def populate_db():
                         WHERE a.name = b.name
                         DELETE r
                         """, {"name":element['Category'][0], "other":interest})
+
 
 
     # ### Wikipedia
