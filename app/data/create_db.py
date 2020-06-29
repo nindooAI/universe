@@ -118,7 +118,7 @@ def populate_db():
             for interest in element['Category']:
                 if 'Label' in element.keys():
                     sess.run("""                    
-                        MATCH (a:INTEREST {name: $name}),(b:Text {link: $link}),(c:AREA {name: $label}), (d:Source {name: $source}))
+                        MATCH (a:INTEREST {name: $name}),(b:Text {link: $link}),(c:AREA {name: $label}), (d:Source {name: $source})
                         MERGE (b)-[r:BELONGS_TO]->(a)
                         MERGE (b)-[:BELONGS_TO]->(c)
                         MERGE (a)<-[:INCLUDES]-(c)
