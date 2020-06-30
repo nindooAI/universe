@@ -23,7 +23,7 @@ driver = GraphDatabase.driver(os.getenv('N4J_URL'),  auth=basic_auth(os.getenv('
 # In[ ]:
 @logger.catch
 def populate_db():
-    print('Crawler')
+    logger.info('Crawler')
     response_txt = requests.get(os.getenv('CRAWLER_URL')).text 
     response = json.loads(response_txt)
 
@@ -46,10 +46,9 @@ def populate_db():
 
     # Criando nó da fonte
 
-
+    logger.info('Medium')
     source = 'Medium'
 
-    print(source)
 
     with driver.session() as sess:
         sess.run("""
@@ -66,7 +65,7 @@ def populate_db():
     # In[ ]:
 
 
-    print('Super categorias')
+    logger.info('Super categorias')
     with driver.session() as sess:
         for element in response:
             if 'Label' in element.keys():
@@ -82,7 +81,7 @@ def populate_db():
     # In[ ]:
 
 
-    print('Interesses')
+    logger.info('Interesses')
     with driver.session() as sess:
         for element in response:
             for interest in element['Category']:
@@ -97,7 +96,7 @@ def populate_db():
     # In[ ]:
 
 
-    print('Artigos')
+    logger.info('Artigos')
     with driver.session() as sess:
         for element in response:
             try:
@@ -128,6 +127,7 @@ def populate_db():
     # In[ ]:
 
     # ### Criando ligações entre nós:
+    logger.info('Ligações')
     with driver.session() as sess:
         for element in response:
             for interest in element['Category']:
@@ -150,7 +150,7 @@ def populate_db():
 
     # In[ ]:
 
-
+    
     with driver.session() as sess:
         for element in response:
             for interest in element['Category']:
@@ -182,7 +182,7 @@ def populate_db():
     # In[ ]:
 
 
-    print('Wikipedia')
+    logger.info('Wikipedia')
     with open('./app/data/wiki.json','r') as fp:
         pre_dict = json.load(fp)
 

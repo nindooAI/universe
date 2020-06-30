@@ -35,10 +35,9 @@ driver = GraphDatabase.driver( os.getenv('N4J_URL'),  auth=basic_auth(os.getenv(
 
 # In[ ]:
 
-
-print('Preparando Dataset')
 @logger.catch
 def pre_process():
+    logger.info('Pre processando')
     pulling_query = """            MATCH (a)-->(b)
                 RETURN ID(a) AS source, ID(b) AS target
                 """
@@ -48,13 +47,12 @@ def pre_process():
     print(edges_db.shape)
     edges_db.head()
 
-    print('Criando Grafo')
     graph = sg.StellarGraph(edges =  edges_db)
     print(graph.info())
 
 ### Random walks -> parte mais lenta
     start = time.time()
-    print('RANDOM WALKS')
+    logger.info('Random Walks')
     walk_length = 50  # maximum/ length of a random walk to use throughout this noteboo
 
     rw = sg.data.BiasedRandomWalk(graph)
@@ -67,16 +65,16 @@ def pre_process():
         weighted=True,  # for weighted random walks
         seed=42,  # random seed fixed for reproducibility
     )
-    print("Number of random walks: {}".format(len(weighted_walks)))
+    #print("Number of random walks: {}".format(len(weighted_walks)))
 
     string_walks = [[str(n) for n in walk] for walk in weighted_walks]
     end = time.time()
-    print('TEMPO PARA GERAR RWs',end - start)
+    logger.info('Tempo das random Walks',end - start)
     return string_walks
 
 ### Training
 def train(string_walks):
-    print('Treino')
+    logger.info('Treinando')
     weighted_model = Word2Vec(
         string_walks, size=128, window=5, min_count=0, sg=1, workers=1, iter=1
     )
@@ -87,8 +85,8 @@ def train(string_walks):
 
 @logger.catch
 def update_emb():
+    logger.info('Atualizando embs')
     weighted_model = Word2Vec.load('./app/data/word2vec.model')
-    print('Plot')
     # Retrieve node embeddings and corresponding subjects
     node_ids = weighted_model.wv.index2word  # list of node IDs
     weighted_node_embeddings = (
@@ -97,7 +95,6 @@ def update_emb():
     # the gensim ordering may not match the StellarGraph one, so rearrange
     int_ids = [int(node) for node in node_ids]
 
-    print('Adicionando embeddings')
     pulling_query = """            MATCH (a)
                 WHERE  ID(a) = $id
                 SET a.embedding = $emb

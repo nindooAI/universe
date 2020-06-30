@@ -80,6 +80,7 @@ def get_emb(user_id):
         return { 'message': True}
     except:
         return Exception
+    
 
 if __name__ == "__main__":
     # Run app with uvicorn with port and host specified. Host needed for docker port mapping
