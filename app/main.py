@@ -39,6 +39,7 @@ def update_db():
         populate_db()
     except:
         return {"message", "Erro ao atualizar o banco de dados"}
+    
     retrain()
 
 @app.post('/retrain')
@@ -48,17 +49,27 @@ def retrain():
     Retrain the model to update embeddings on neo4j.
     """
     logger.info('Retreinando o modelo')
-    data = n4j.pre_process()
+    try:
+        data = n4j.pre_process()
+    except:
+        return {"message", "Erro ao preprocessar dados"}   
     #logger.debug('Erro ao preprocessar dados')
 
     logger.info('Iniciando treino')
-    n4j.train(data)
-    #logger.debug('Erro ao treinar')
+    try:
+        n4j.train(data)
+    except:
+        return {"message", "Erro ao treinar modelo"}
+        #logger.debug('Erro ao treinar')
 
     logger.info('Enviando embeddings para neo4j')
-    n4j.update_emb()
+    try:
+        n4j.update_emb()
+    except:
+        return {"message", "Erro ao tentar atualizar o neo4j"}
     #logger.debug('Erro em atualizar o DB')
 
+    return {"message", "Modelo retreinado e banco de dados atualizado"}
 
 @app.post('/emb')
 @logger.catch()
