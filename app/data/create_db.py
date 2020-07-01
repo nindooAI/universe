@@ -14,7 +14,7 @@ import os
 import requests
 import json
 from neo4j import GraphDatabase, basic_auth
-import wikipedia
+#import wikipedia
 from loguru import logger
 
 driver = GraphDatabase.driver(os.getenv('N4J_URL'),  auth=basic_auth(os.getenv('N4J_USER'),os.getenv('N4J_PASS')))
@@ -182,52 +182,52 @@ def populate_db():
     # In[ ]:
 
 
-    logger.info('Wikipedia')
-    with open('./app/data/wiki.json','r') as fp:
-        pre_dict = json.load(fp)
+    # logger.info('Wikipedia')
+    # with open('./app/data/wiki.json','r') as fp:
+    #     pre_dict = json.load(fp)
 
 
-    # In[ ]:
+    # # In[ ]:
 
 
 
 
 
-    # In[ ]:
+    # # In[ ]:
 
 
-    lista = []
-    for element in response:
-            for interest in element['Category']:
-                if interest not in pre_dict.keys():
-                    lista.append(interest)
-    interests = set(lista)
-    descriptions = pre_dict
-    for element in interests:
-        if element not in descriptions.keys():
-            try:
-                pagina = wikipedia.page(element)
-                descriptions[element] = pagina.summary
-            except:
-                descriptions[element] = 'Not Found'
+    # lista = []
+    # for element in response:
+    #         for interest in element['Category']:
+    #             if interest not in pre_dict.keys():
+    #                 lista.append(interest)
+    # interests = set(lista)
+    # descriptions = pre_dict
+    # for element in interests:
+    #     if element not in descriptions.keys():
+    #         try:
+    #             pagina = wikipedia.page(element)
+    #             descriptions[element] = pagina.summary
+    #         except:
+    #             descriptions[element] = 'Not Found'
             
 
 
-    # In[ ]:
+    # # In[ ]:
 
 
-    with open('./app/data/wiki.json', 'w') as fp:
-        json.dump(descriptions, fp)
+    # with open('./app/data/wiki.json', 'w') as fp:
+    #     json.dump(descriptions, fp)
 
 
-    # In[ ]:
+    # # In[ ]:
 
 
-    with driver.session() as sess:
-        for element in descriptions.keys():
-            sess.run("""                MATCH (b:INTEREST {name: $name})
-                    SET b.description = $description
-                    """, {"name":element,"description":descriptions[element]})
+    # with driver.session() as sess:
+    #     for element in descriptions.keys():
+    #         sess.run("""                MATCH (b:INTEREST {name: $name})
+    #                 SET b.description = $description
+    #                 """, {"name":element,"description":descriptions[element]})
         
 
 
