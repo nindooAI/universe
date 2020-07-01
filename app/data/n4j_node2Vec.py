@@ -69,7 +69,7 @@ def pre_process():
 
     string_walks = [[str(n) for n in walk] for walk in weighted_walks]
     end = time.time()
-    logger.info('Tempo das random Walks',end - start)
+    logger.info('Tempo das random Walks ' + str(end - start))
     return string_walks
 
 ### Training

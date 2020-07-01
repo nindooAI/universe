@@ -69,7 +69,7 @@ def retrain():
         return {"message", "Erro ao tentar atualizar o neo4j"}
     #logger.debug('Erro em atualizar o DB')
 
-    return {"message", "Modelo retreinado e banco de dados atualizado"}
+    return {"message", "Modelo retreinado"}
 
 @app.post('/emb')
 @logger.catch()
