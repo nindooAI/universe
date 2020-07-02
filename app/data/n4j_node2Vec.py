@@ -108,22 +108,21 @@ def update_emb():
 @logger.catch
 def gen_emb(nodeids):
     logger.info('Gerando embedding para usuario de ID' +  str(nodeids))
-    pulling_query = """        
-                MATCH (a)-[*1]-(b)
-                WHERE  ID(a) = $id
-                return collect(b.embbedding)
-                """
     with driver.session() as sess:
-        result = list(sess.run(pulling_query,{"id":nodeids}))
-    logger.info(str(result.keys()))
+        result = list(sess.run("""        
+                MATCH (a)-[*1]-(b)
+                WHERE  ID(a) = $nid
+                return collect(b.embedding)
+                """,{"nid":nodeids}))
+
     array = result[0][0]
     mean = np.mean(array,axis=0)
-    
+    print(mean)
     set_query = """        
-                MATCH (a)
-                WHERE  ID(a) = $id AND NOT a.embbedding
-                SET a.embedding = $mean
-                """
+                    MATCH (a)
+                    WHERE  ID(a) = $id
+                    SET a.embedding = $mean
+                    """
     with driver.session() as sess:
         sess.run(set_query,{"id":nodeids, "mean": mean.tolist()})
-    
+        
