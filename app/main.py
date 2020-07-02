@@ -71,15 +71,15 @@ def retrain():
 
     return {"message", "Modelo retreinado"}
 
-@app.post('/emb')
+@app.post('/get_emb')
 @logger.catch()
 # gera emedding e deolve para o banco
 def get_emb(user_id):
     try:
         n4j.gen_emb(user_id)
-        return { 'message': True}
+        return { 'message': "Embedding criado"}
     except:
-        return Exception
+        return {"message": "Falha ao criar embedding "}
     
 
 if __name__ == "__main__":
