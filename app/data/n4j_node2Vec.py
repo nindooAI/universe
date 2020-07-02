@@ -114,7 +114,7 @@ def gen_emb(nodeids):
                 return collect(b.embbedding)
                 """
     with driver.session() as sess:
-        result = sess.run(pulling_query,{"id":nodeids})
+        result = list(sess.run(pulling_query,{"id":nodeids}))
     
     array = result[0][0]
     mean = np.mean(array,axis=0)
