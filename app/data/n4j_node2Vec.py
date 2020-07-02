@@ -125,5 +125,5 @@ def gen_emb(nodeids):
                 SET a.embedding = $mean
                 """
     with driver.session() as sess:
-        array = sess.run(set_query,{"id":nodeids, "mean": mean.tolist()})
+        sess.run(set_query,{"id":nodeids, "mean": mean.tolist()})
     
