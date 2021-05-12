@@ -1,10 +1,10 @@
-FROM tensorflow/tensorflow:latest-py3
+FROM tensorflow/tensorflow:latest
 
 LABEL maintainer="joaopedro@nindoo.ai"
 
-RUN mkdir -p /home/universe-api/
+RUN mkdir /root/app
 
-WORKDIR /home/universe-api/
+WORKDIR /root/app/
 
 RUN pip install --no-cache-dir -U pip
 
@@ -13,11 +13,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 
-COPY . .
+COPY ./app .
 
-ENV CRAWLER_URL='https://spxa6xmc58.execute-api.us-west-2.amazonaws.com/prod/'
-ENV N4J_URL='bolt://104.248.235.192:7687/'
-ENV N4J_USER='neo4j'
-ENV N4J_PASS='nindoo123'
 
-CMD ["python", "app/main.py"]
+CMD ["python", "main.py"]
