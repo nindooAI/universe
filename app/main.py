@@ -57,9 +57,10 @@ def update_db():
 
     try:
         logger.info('[*] Puxando dados do crawler')
-        response_txt = requests.get(os.getenv('CRAWLER_URL')).text
-        response = json.loads(response_txt)
-        neo_client.populate_db(response, source)
+        response = requests.get(os.getenv('CRAWLER_URL'))
+        response_txt = response.text
+        articles = json.loads(response_txt)
+        neo_client.populate_db(articles, source)
 
     except Exception:
         raise HTTPException(

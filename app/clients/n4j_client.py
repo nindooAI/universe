@@ -1,4 +1,3 @@
-from logging import exception
 from py2neo import Graph
 from loguru import logger
 
@@ -73,20 +72,25 @@ class n4j_client():
         for element in response:
             for interest in element['Category']:
                 if 'Label' in element.keys():
-                    self.worker.run("""                    
-                        MATCH (a:INTEREST {name: $name}),(b:Text {link: $link}),(c:AREA {name: $label}), (d:Source {name: $source})
+                    self.worker.run("""
+                        MATCH (a:INTEREST {name: $name}),\
+                        (b:Text {link: $link}),\
+                        (c:AREA {name: $label}), (d:Source {name: $source})
                         MERGE (b)-[r:BELONGS_TO]->(a)
                         MERGE (b)-[:BELONGS_TO]->(c)
                         MERGE (a)<-[:INCLUDES]-(c)
                         MERGE (b)-[:IS_FROM]->(d)
-                        """, {"name": interest, "link": element['Link'], "label": element['Label'], "source": source})
+                        """, {"name": interest, "link": element['Link'],
+                              "label": element['Label'], "source": source})
                 else:
                     self.worker.run("""                    MATCH (a:INTEREST {name: $name}),(b:Text {link: $link})
                         MERGE (b)-[r:BELONGS_TO]->(a)
                         """, {"name": interest, "link": element['Link']})
 
         # ### Conectando áreas similares
-        # SE mais de uma categoria aparece no artigo, gerar conexões entre elas. Como tive que iterar por todas, na outra célula apago os `self-loops`
+        # SE mais de uma categoria aparece no artigo,
+        # gerar conexões entre elas. Como tive que iterar
+        # por todas, na outra célula apago os `self-loops`
 
         for element in response:
             for interest in element['Category']:
@@ -100,7 +104,9 @@ class n4j_client():
         for element in response:
             for interest in element['Category']:
                 if len(element['Category']) >= 1:
-                    self.worker.run("""                    MATCH (a:INTEREST {name: $name})-[r:IS_RELATED]->(b:INTEREST {name: $other}) 
+                    self.worker.run("""
+                        MATCH (a:INTEREST {name: $name})-[r:IS_RELATED]->(b:INTEREST\
+                            {name: $other})
                         WHERE a.name = b.name
                         DELETE r
                         """, {"name": element['Category'][0], "other": interest})
@@ -128,5 +134,6 @@ class n4j_client():
                     WHERE  ID(a) = id
                     SET a.embedding = emb
                     """
-        resposta = self.worker.run(set_query, {"node_id": node_id, "embedding": embedding})
+        resposta = self.worker.run(
+            set_query, {"node_id": node_id, "embedding": embedding})
         return resposta
