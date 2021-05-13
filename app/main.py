@@ -57,10 +57,7 @@ def update_db():
 
     try:
         logger.info('[*] Puxando dados do crawler')
-
-        # response = requests.get(os.getenv('CRAWLER_URL'), stream=True)
-        with open('/Users/jpmc/Nindoo/Whitelabel/universe/app/index.html', 'r') as f:
-            response = f.read()
+        response = requests.get(os.getenv('CRAWLER_URL'), stream=True)
         response_txt = response
         articles = json.loads(response_txt)
         neo_client.populate_db(articles, source)
