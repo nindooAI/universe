@@ -8,7 +8,7 @@ from scripts.pre_process import pre_process
 from clients.n4j_client import n4j_client
 from scripts.utils import make_dirs
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Response, status, HTTPException
 load_dotenv()
 
 # Iniciando logs
@@ -57,8 +57,11 @@ def update_db():
 
     try:
         logger.info('[*] Puxando dados do crawler')
-        response = requests.get(os.getenv('CRAWLER_URL'))
-        response_txt = response.text
+
+        # response = requests.get(os.getenv('CRAWLER_URL'), stream=True)
+        with open('/Users/jpmc/Nindoo/Whitelabel/universe/app/index.html', 'r') as f:
+            response = f.read()
+        response_txt = response
         articles = json.loads(response_txt)
         neo_client.populate_db(articles, source)
 
@@ -126,23 +129,24 @@ def update_emb():
     return {"message", "Embeddings atualizados"}
 
 
-@app.post('/get_emb')
 @logger.catch()
-def get_emb(node_id):
+@app.post('/get_emb')
+def get_emb(node_id: int, response: Response ):
     logger.info('Gerando embedding para nó de ID' + str(node_id))
-    try:
-        neighboors = list(neo_client.worker.run("""
-                MATCH (a)-[*1]-(b)
-                WHERE  ID(a) = $nid
-                return collect(b.embedding)
-                """, {"nid": int(node_id)}))
-        emb = universe_client.gen_emb(neighboors)
-        neo_client.set_emb(list(int(node_id)), emb)
-        return {'message': "Embedding criado"}
-    except Exception:
-        return HTTPException(
-            status_code=404,
-            detail="Erro ao preprocessar dados")
+    # try:
+    neighboors = list(neo_client.graph.run("""
+            MATCH (a)-[*1]-(b)
+            WHERE  ID(a) = $nid
+            return collect(b.embedding)
+            """, parameters={"nid": int(node_id)}))
+    emb = universe_client.gen_emb(neighboors)
+    neo_client.set_emb(node_id, emb)
+    return {'message': "Embedding criado"}
+    # except Exception as ex:
+    #     response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    #     return HTTPException(
+    #         status_code=response.status_code,
+    #         detail=ex)
 
 
 if __name__ == "__main__":

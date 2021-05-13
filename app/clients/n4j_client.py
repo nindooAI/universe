@@ -1,28 +1,30 @@
-from py2neo import Graph
+from py2neo import Graph,Node, Relationship
 from loguru import logger
-
-
+import sys
 @logger.catch()
 class n4j_client():
     def __init__(self, connection_string, user, password):
-        self.worker = Graph(connection_string, auth=(user, password))
+        self.graph = Graph(connection_string, auth=(user, password))
+
+    def to_data(self, result):
+        return result.data()
 
     def populate_db(self, response, source):
-
+        tx = self.graph.begin()
         # Criando nó da fonte
 
-        self.worker.run("""
-                MERGE (a:Source {name:$source})
-                        """, {"source": source})
+        source_node = Node("Source", name = source)
+        tx.merge(source_node)
+        tx.commit()
 
         # ### Super categorias
         # Criando nós de super categorias
-
+        
         logger.info('[*] Super categorias')
         for element in response:
             if 'Label' in element.keys():
-                self.worker.run("""MERGE (a:AREA {name: $label})
-                    """, {"label": element['Label']})
+                self.graph.run("""MERGE (a:AREA {name: $label})
+                    """, parameters={"label": element['Label']})
 
         # ### Interesses:
         # Crio os nós de Interesses,
@@ -31,8 +33,8 @@ class n4j_client():
         logger.info('[*] Interesses')
         for element in response:
             for interest in element['Category']:
-                self.worker.run("""                MERGE (a:INTEREST {name: $name})
-                    """, {"name": interest})
+                self.graph.run("""                MERGE (a:INTEREST {name: $name})
+                    """, parameters={"name": interest})
 
         # ## Artigos
         # Primeiro crio os nós de artigos e depois conecto eles a
@@ -42,16 +44,16 @@ class n4j_client():
         logger.info('[*] Artigos')
         for element in response:
             try:
-                self.worker.run("""MERGE (b:Data:Text:Blog {link: $link})
+                self.graph.run("""MERGE (b:Data:Text:Blog {link: $link})
                     SET b.link = $link, b.image_url = $image_url, b.description = $description, b.date = $pub_date, b.title = $title
-                    """, {"link": element['Link'], "image_url": element['image'], "pub_date": element['PubDate'],
-                          "description": element['Description'], "title": element['Title']})
+                    """, parameters={"link": element['Link'], "image_url": element['image'], "pub_date": element['PubDate'],
+                                     "description": element['Description'], "title": element['Title']})
             except:
                 pass
 
         # Limpando artigos repetidos
 
-        self.worker.run("""
+        self.graph.run("""
         MATCH (a:Blog),(b:Blog)
         WHERE toLower(a.link) <> tolower(b.link) AND id(a) <> id(b) AND tolower(a.title) = tolower(b.title)
         with collect(b) as nodes
@@ -59,7 +61,7 @@ class n4j_client():
         """
                         )
 
-        self.worker.run("""
+        self.graph.run("""
         MATCH (a:Blog),(b:Blog)
         WHERE toLower(a.title) = tolower(b.title) AND id(a) <> id(b)
         with collect(b) as nodes
@@ -72,7 +74,7 @@ class n4j_client():
         for element in response:
             for interest in element['Category']:
                 if 'Label' in element.keys():
-                    self.worker.run("""
+                    self.graph.run("""
                         MATCH (a:INTEREST {name: $name}),\
                         (b:Text {link: $link}),\
                         (c:AREA {name: $label}), (d:Source {name: $source})
@@ -80,12 +82,12 @@ class n4j_client():
                         MERGE (b)-[:BELONGS_TO]->(c)
                         MERGE (a)<-[:INCLUDES]-(c)
                         MERGE (b)-[:IS_FROM]->(d)
-                        """, {"name": interest, "link": element['Link'],
-                              "label": element['Label'], "source": source})
+                        """, parameters={"name": interest, "link": element['Link'],
+                                         "label": element['Label'], "source": source})
                 else:
-                    self.worker.run("""                    MATCH (a:INTEREST {name: $name}),(b:Text {link: $link})
+                    self.graph.run("""                    MATCH (a:INTEREST {name: $name}),(b:Text {link: $link})
                         MERGE (b)-[r:BELONGS_TO]->(a)
-                        """, {"name": interest, "link": element['Link']})
+                        """, parameters={"name": interest, "link": element['Link']})
 
         # ### Conectando áreas similares
         # SE mais de uma categoria aparece no artigo,
@@ -95,38 +97,38 @@ class n4j_client():
         for element in response:
             for interest in element['Category']:
                 if len(element['Category']) != 1:
-                    self.worker.run("""                    MATCH (a:INTEREST {name: $name}), (b:INTEREST {name: $other}) 
+                    self.graph.run("""                    MATCH (a:INTEREST {name: $name}), (b:INTEREST {name: $other}) 
                         WHERE NOT (a)-[:IS_RELATED]-(b) 
                         MERGE (a)-[:IS_RELATED]->(b)
-                        """, {"name": element['Category'][0], "other": interest})
+                        """, parameters={"name": element['Category'][0], "other": interest})
 
         # Deletando ligações iguais
         for element in response:
             for interest in element['Category']:
                 if len(element['Category']) >= 1:
-                    self.worker.run("""
+                    self.graph.run("""
                         MATCH (a:INTEREST {name: $name})-[r:IS_RELATED]->(b:INTEREST\
                             {name: $other})
                         WHERE a.name = b.name
                         DELETE r
-                        """, {"name": element['Category'][0], "other": interest})
+                        """,  parameters={"name": element['Category'][0], "other": interest})
 
     def get_all_nodes(self):
         pulling_query = """
                     MATCH (a)-->(b)
                     RETURN ID(a) AS source, ID(b) AS target
                     """
-        result = self.worker.run(pulling_query)
+        result = self.graph.run(pulling_query)
         return result
 
     def set_emb(self, node_id, embedding):
-        if len(node_id) == 1:
+        if type(node_id) == int:
             set_query = """
                     MATCH (a)
-                    WHERE  ID(a) = $id
-                    SET a.embedding = $emb
+                    WHERE  ID(a) = $node_id
+                    SET a.embedding = $embedding
                     """
-        else:
+        elif len(node_id) >= 1:
             set_query = """
                     UNWIND $node_id as id
                     UNWIND $embedding as emb
@@ -134,6 +136,6 @@ class n4j_client():
                     WHERE  ID(a) = id
                     SET a.embedding = emb
                     """
-        resposta = self.worker.run(
-            set_query, {"node_id": node_id, "embedding": embedding})
+        resposta = self.graph.run(
+            set_query, parameters={"node_id": node_id, "embedding": embedding})
         return resposta
