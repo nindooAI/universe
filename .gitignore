@@ -1,6 +1,7 @@
 .env
 .vscode/
-*ipynb_checkpoints/
-*/logs
-./notebooks/
-*/__pycache__/
+.ipynb_checkpoints/
+log_files/
+notebooks/
+scripts
+__pycache__/
