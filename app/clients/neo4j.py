@@ -1,25 +1,72 @@
-from py2neo import Graph,Node, Relationship
+from py2neo import Graph, Node, Relationship
+from py2neo.matching import NodeMatcher
+from py2neo.export import to_pandas_data_frame
 from loguru import logger
+import pandas as pd
 import sys
+
+
 @logger.catch()
 class n4j_client():
     def __init__(self, connection_string, user, password):
         self.graph = Graph(connection_string, auth=(user, password))
+        self.node_matcher = NodeMatcher(self.graph)
 
     def to_data(self, result):
         return result.data()
+
+    def get_nodes(self, label, features_dict):
+        nodes = self.node_matcher.match(label).all()
+        nodes_ids = [node.identity for node in nodes]
+        dataframe = to_pandas_data_frame(nodes)
+        dataframe.index = nodes_ids
+        if len(features_dict) > 0:
+            features_dataframe = dataframe[features_dict.keys()]
+            features_dataframe[:] = 0
+        else:
+            return pd.DataFrame(index=nodes_ids)
+        return features_dataframe
+
+    def get_edges(self):
+        pulling_query = """
+                    MATCH (a)-->(b)
+                    RETURN ID(a) AS source, ID(b) AS target
+                    """
+        edges = self.graph.run(pulling_query)
+        return to_pandas_data_frame(edges)
+
+    def set_emb(self, node_id, embedding):
+        if type(node_id) == int:
+            set_query = """
+                    MATCH (a)
+                    WHERE  ID(a) = $node_id
+                    SET a.embedding = $embedding
+                    """
+        elif len(node_id) >= 1:
+            set_query = """
+                    UNWIND $node_id as id
+                    UNWIND $embedding as emb
+                    MATCH (a)
+                    WHERE  ID(a) = id
+                    SET a.embedding = emb
+                    """
+        resposta = self.graph.run(
+            set_query, parameters={"node_id": node_id, "embedding": embedding})
+        return resposta
 
     def populate_db(self, response, source):
         tx = self.graph.begin()
         # Criando nó da fonte
 
-        source_node = Node("Source", name = source)
+        source_node = Node("Source", name=source)
+        source_node.__primarykey__ = 'name'
+        source_node.__primarylabel__ = "Source"
         tx.merge(source_node)
         tx.commit()
 
         # ### Super categorias
         # Criando nós de super categorias
-        
+
         logger.info('[*] Super categorias')
         for element in response:
             if 'Label' in element.keys():
@@ -59,7 +106,7 @@ class n4j_client():
         with collect(b) as nodes
         foreach (node in nodes | detach delete node)
         """
-                        )
+                       )
 
         self.graph.run("""
         MATCH (a:Blog),(b:Blog)
@@ -67,7 +114,7 @@ class n4j_client():
         with collect(b) as nodes
         foreach (node in nodes | detach delete node)
         """
-                        )
+                       )
 
         # Criando ligações entre nós:
         logger.info('[*] Ligações')
@@ -112,30 +159,3 @@ class n4j_client():
                         WHERE a.name = b.name
                         DELETE r
                         """,  parameters={"name": element['Category'][0], "other": interest})
-
-    def get_all_nodes(self):
-        pulling_query = """
-                    MATCH (a)-->(b)
-                    RETURN ID(a) AS source, ID(b) AS target
-                    """
-        result = self.graph.run(pulling_query)
-        return result
-
-    def set_emb(self, node_id, embedding):
-        if type(node_id) == int:
-            set_query = """
-                    MATCH (a)
-                    WHERE  ID(a) = $node_id
-                    SET a.embedding = $embedding
-                    """
-        elif len(node_id) >= 1:
-            set_query = """
-                    UNWIND $node_id as id
-                    UNWIND $embedding as emb
-                    MATCH (a)
-                    WHERE  ID(a) = id
-                    SET a.embedding = emb
-                    """
-        resposta = self.graph.run(
-            set_query, parameters={"node_id": node_id, "embedding": embedding})
-        return resposta

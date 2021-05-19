@@ -3,12 +3,14 @@ import requests
 import json
 import os
 from loguru import logger
-from scripts.machine_learning import Universe
-from scripts.pre_process import pre_process
-from clients.n4j_client import n4j_client
+from clients.machine_learning import Universe
+from scripts import pre_process
+from clients.neo4j import n4j_client
 from scripts.utils import make_dirs
+from stellargraph.utils import plot_history
 import uvicorn
 from fastapi import FastAPI, Response, status, HTTPException
+from stellargraph.utils import history, plot_history
 load_dotenv()
 
 # Iniciando logs
@@ -30,8 +32,6 @@ app = FastAPI(title='Universe API', version='0.1',
 
 neo_client = n4j_client(connection_string=os.getenv(
     "N4J_URL"), user=os.getenv("N4J_USER"), password=os.getenv("N4J_PASS"))
-
-universe_client = Universe(model_path=model_path)
 
 
 @app.get('/')
@@ -58,7 +58,7 @@ def update_db():
     try:
         logger.info('[*] Puxando dados do crawler')
         response = requests.get(os.getenv('CRAWLER_URL'), stream=True)
-        response_txt = response
+        response_txt = response.text
         articles = json.loads(response_txt)
         neo_client.populate_db(articles, source)
 
@@ -67,8 +67,6 @@ def update_db():
             status_code=404,
             detail="Erro ao atualizar o banco e treinar modelo")
 
-    retrain()
-
 
 @app.post('/retrain')
 @logger.catch()
@@ -76,20 +74,57 @@ def retrain():
     """
     Retrain the model to update embeddings on neo4j.
     """
-    logger.info('Retreinando o modelo')
-    logger.info('[*] Baixando dados do neo4j')
+    logger.info('[!] Retreinando o modelo')
+    logger.info('[1/x] Baixando dados do neo4j')
     try:
-        nodes = neo_client.get_all_nodes()
+        users_dataframe = neo_client.get_nodes(
+            label='User', features_dict={'miniBio': str})
+        items_dataframe = neo_client.get_nodes(
+            label='Blog', features_dict={'description': str})
+        domains_dataframe = neo_client.get_nodes(
+            label='AREA', features_dict={'name': str})
+        interests_dataframe = neo_client.get_nodes(
+            label='INTEREST', features_dict={'name': str})
+        spaces_dataframe = neo_client.get_nodes(
+            label='Space', features_dict={'name': str})
+        sources_dataframe = neo_client.get_nodes(
+            label='Source', features_dict={'name': str})
+        shared_dataframe = neo_client.get_nodes(
+            label='Shared', features_dict={})
+
+        edges_dataframe = neo_client.get_edges()
+        print(edges_dataframe.head())
+        print(shared_dataframe.head())
     except Exception:
         raise HTTPException(
             status_code=404,
             detail="Erro ao puxar dados do neo4j")
-    try:
-        string_walks = pre_process(nodes)
-    except Exception:
-        raise HTTPException(
-            status_code=404,
-            detail="Erro ao preprocessar dados")
+    logger.info('[2/x] Pre-processando dados')
+    nodes_dfs_list = [users_dataframe,
+                      items_dataframe,
+                      domains_dataframe,
+                      interests_dataframe,
+                      spaces_dataframe,
+                      sources_dataframe,
+                      shared_dataframe]
+    merged_df = pre_process.merge_dfs(nodes_dfs_list)
+    # head_nodes = list(nodes_dfs_dict.keys())
+    # try:
+    graph = pre_process.create_graph(edges_dataframe,
+                                     nodes_df=merged_df)
+
+    logger.info("Grafo: ")
+    logger.info(graph.info())
+
+    universe_client = Universe(graph=graph)
+    logger.info("[3/x] Treinando modelo")
+    history = universe_client.train()
+    plot_history(history)
+
+    # except Exception:
+    #     raise HTTPException(
+    #         status_code=404,
+    #         detail="Erro ao preprocessar dados")
 
     logger.info('Iniciando treino')
     try:
@@ -128,7 +163,7 @@ def update_emb():
 
 @logger.catch()
 @app.post('/get_emb')
-def get_emb(node_id: int, response: Response ):
+def get_emb(node_id: int, response: Response):
     logger.info('Gerando embedding para nó de ID' + str(node_id))
     # try:
     neighboors = list(neo_client.graph.run("""
@@ -144,6 +179,13 @@ def get_emb(node_id: int, response: Response ):
     #     return HTTPException(
     #         status_code=response.status_code,
     #         detail=ex)
+
+
+@app.post('/terraform')
+def terraform():
+    update_db()
+    retrain()
+    update_emb()
 
 
 if __name__ == "__main__":
