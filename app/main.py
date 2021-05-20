@@ -1,3 +1,4 @@
+import matplotlib
 from dotenv import load_dotenv
 import requests
 import json
@@ -12,6 +13,7 @@ import uvicorn
 from fastapi import FastAPI, Response, status, HTTPException
 from stellargraph.utils import history, plot_history
 load_dotenv()
+matplotlib.pyplot.switch_backend('Agg')
 
 # Iniciando logs
 log_format = "{time} | {level} | {message} | {file} | {line} | {function} | {exception}"
@@ -93,8 +95,6 @@ def retrain():
             label='Shared', features_dict={})
 
         edges_dataframe = neo_client.get_edges()
-        print(edges_dataframe.head())
-        print(shared_dataframe.head())
     except Exception:
         raise HTTPException(
             status_code=404,
@@ -108,41 +108,30 @@ def retrain():
                       sources_dataframe,
                       shared_dataframe]
     merged_df = pre_process.merge_dfs(nodes_dfs_list)
-    # head_nodes = list(nodes_dfs_dict.keys())
-    # try:
+    logger.info('merged_df')
+    logger.info(merged_df.head())
     graph = pre_process.create_graph(edges_dataframe,
                                      nodes_df=merged_df)
-
     logger.info("Grafo: ")
     logger.info(graph.info())
 
     universe_client = Universe(graph=graph)
     logger.info("[3/x] Treinando modelo")
-    history = universe_client.train()
-    plot_history(history)
+    new_model, history = universe_client.train(epochs=3)
+    figure = plot_history(history, return_figure=True)
+    figure.savefig('loss.png')
 
     # except Exception:
     #     raise HTTPException(
     #         status_code=404,
     #         detail="Erro ao preprocessar dados")
-
-    logger.info('Iniciando treino')
-    try:
-        new_model = universe_client.train(string_walks)
-    except Exception:
-        raise HTTPException(
-            status_code=404,
-            detail="Erro ao preprocessar dados")
-
-    logger.info("[*] Salvando o modelo")
-    try:
-        universe_client.save_model(new_model, model_path)
-    except Exception:
-        raise HTTPException(
-            status_code=404,
-            detail="Erro ao salvar modelo")
-
-    update_emb()
+    # logger.info("[*] Salvando o modelo")
+    # try:
+    #     universe_client.save_model(new_model, model_path)
+    # except Exception:
+    #     raise HTTPException(
+    #         status_code=404,
+    #         detail="Erro ao salvar modelo")
 
 
 @app.post('/update_emb')

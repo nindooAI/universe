@@ -3,7 +3,6 @@ from py2neo.matching import NodeMatcher
 from py2neo.export import to_pandas_data_frame
 from loguru import logger
 import pandas as pd
-import sys
 
 
 @logger.catch()
@@ -22,7 +21,7 @@ class n4j_client():
         dataframe.index = nodes_ids
         if len(features_dict) > 0:
             features_dataframe = dataframe[features_dict.keys()]
-            features_dataframe[:] = 0
+            features_dataframe[:] = 1
         else:
             return pd.DataFrame(index=nodes_ids)
         return features_dataframe

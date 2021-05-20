@@ -5,47 +5,67 @@ from networkx.classes.graph import Graph
 import pandas as pd
 import numpy as np
 from loguru import logger
-from sklearn.manifold import TSNE
-import stellargraph as sg
+from pandas.core.frame import DataFrame
+from stellargraph.layer import GraphSAGE, link_classification
 from stellargraph.mapper import (
-    CorruptedGenerator,
-    GraphSAGENodeGenerator,
+    GraphSAGELinkGenerator,
     FullBatchNodeGenerator
 )
+from stellargraph.data import UniformRandomWalk
+from stellargraph.data import UnsupervisedSampler
+
 from tensorflow.keras import Model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.losses import CosineSimilarity
 import tensorflow as tf
-from stellargraph import StellarGraph
-from stellargraph.layer import DeepGraphInfomax, GraphSAGE
 from matplotlib import pyplot as plt
 from dotenv import load_dotenv
 load_dotenv()
 
 
 class Universe():
-    def __init__(self, graph, model_path=None):
+    def __init__(self, graph, n_walks=1, length=3, model_path=None, data_path=None):
         self.graph = graph
-        self.generator = GraphSAGENodeGenerator(self.graph,
-                                                batch_size=1000,
-                                                num_samples=[5])
-        self.base_model = GraphSAGE(layer_sizes=[128], activations=[
-            "relu"], generator=self.generator)
+
+        self.sampler = UnsupervisedSampler(
+            self.graph, nodes=list(self.graph.nodes()),
+            length=length, number_of_walks=n_walks)
+
+        self.generator = GraphSAGELinkGenerator(self.graph,
+                                                batch_size=500,
+                                                num_samples=[5, 5])
+        self.base_model = GraphSAGE(layer_sizes=[32, 32],
+                                    generator=self.generator,
+                                    bias=True, dropout=0.0, normalize="l2")
+        # if data_path:
+        #     DataFrame = pd.
 
     @logger.catch
-    def train(self, epochs=5, reorder=lambda sequence,
-              subjects: subjects):
-        corrupted_generator = CorruptedGenerator(self.generator)
-        gen = corrupted_generator.flow(self.graph.nodes())
-        infomax = DeepGraphInfomax(self.base_model, corrupted_generator)
+    def train(self, epochs=1):
 
-        x_in, x_out = infomax.in_out_tensors()
+        x_in, x_out = self.base_model.in_out_tensors()
 
-        model = Model(inputs=x_in, outputs=x_out)
-        model.compile(loss=tf.nn.sigmoid_cross_entropy_with_logits,
-                      optimizer=Adam(lr=1e-3))
+        train_gen = self.generator.flow(self.sampler)
+
+        prediction = link_classification(output_dim=1, output_act="sigmoid",
+                                         edge_embedding_method="ip")(x_out)
+
+        model = tf.keras.Model(inputs=x_in, outputs=prediction)
+
+        model.compile(
+            optimizer=tf.keras.optimizers.Adam(lr=1e-3),
+            loss=tf.keras.losses.binary_crossentropy,
+            metrics=["binary_accuracy"],
+        )
         es = EarlyStopping(monitor="loss", min_delta=0, patience=20)
-        history = model.fit(gen, epochs=epochs, verbose=0, callbacks=[es])
+        history = model.fit(
+            train_gen,
+            epochs=epochs,
+            verbose=1,
+            use_multiprocessing=True,
+            workers=4,
+            callbacks=[es])
         # x_emb_in, x_emb_out = self.base_model.in_out_tensors()
         # emb_model = Model(inputs=x_emb_in, outputs=x_emb_out)
         # x_emb_in, x_emb_out = self.base_model.in_out_tensors()
@@ -67,7 +87,7 @@ class Universe():
 
         # y_pred = lr.predict(test_embeddings)
         # acc = (y_pred == ordered_test_subjects).mean()
-        return history
+        return model, history
 
     @ logger.catch
     def update_emb(self):

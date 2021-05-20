@@ -2,7 +2,6 @@ import pandas as pd
 from loguru import logger
 import stellargraph as sg
 import time
-import tokenizers
 
 
 @logger.catch()
@@ -14,7 +13,7 @@ def create_graph(edges_df, nodes_df):
 
 
 def merge_dfs(nodes_dfs_list):
-    return pd.concat(nodes_dfs_list)
+    return pd.concat(nodes_dfs_list).fillna(1)
 
 
 def pre_process(nodes):
