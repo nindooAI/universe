@@ -20,7 +20,6 @@ class n4j_client():
         nodes = self.node_matcher.match(label).all()
         dataframe = to_pandas_data_frame(nodes)
         dataframe.index = dataframe[collection["unique_id"]]
-        logger.info(dataframe.head())
         if "connections" in collection.keys():
             for connection in collection["connections"]:
                 print(connection)
@@ -31,11 +30,11 @@ class n4j_client():
 
         if len(features) > 0:
             features_dataframe = dataframe[features]
-            features_dataframe[:] = 1
 
         cols = [col for col in features_dataframe.columns if '_id' not in col]
         clean_dataframe = features_dataframe[cols]
-        clean_dataframe[:] = 1
+
+        logger.info(' - '.join(['Dataframe raw', label]))
         logger.info(clean_dataframe.head())
 
         return clean_dataframe

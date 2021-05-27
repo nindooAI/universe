@@ -5,7 +5,6 @@ import time
 
 
 @logger.catch()
-# def tokenize(all_text):
 def create_graph(edges_df, nodes_df):
     logger.info(['[*] Construindo grafo'])
     graph = sg.StellarGraph(nodes_df, edges=edges_df)
@@ -13,30 +12,29 @@ def create_graph(edges_df, nodes_df):
 
 
 def merge_dfs(nodes_dfs_list):
-    return pd.concat(nodes_dfs_list).fillna(1)
+    return pd.concat(nodes_dfs_list).fillna(0)
 
 
-def pre_process(nodes):
+def transform(merged_df, preprocess_json):
 
     # Random walks -> parte mais lenta
     start = time.time()
-    logger.info('Random Walks')
+    transformed = pd.DataFrame()
+    logger.info('Pre-processando colunas do dataframe total')
+    for value, key in preprocess_json["features"].items():
+        if value == 'str':
+            transformed[key] = string_transform(merged_df[key])
+        if value == 'categorical':
+            transformed[key] = categorical_transform(merged_df[key])
 
-    # walk_length = 5  # maximum/ length of a random walk to use
-    # rw = sg.data.BiasedRandomWalk(graph)
-    # weighted_walks = rw.run(
-    #     nodes=graph.nodes(),  # root nodes
-    #     length=walk_length,  # maximum length of a random walk
-    #     n=10,  # number of random wxalks per root node
-    #     # Defines (unormalised) probability, 1/p, of returning to source node
-    #     p=0.5,
-    #     # Defines (unormalised) probability, 1/q, for moving away from source
-    #     q=0.5,
-    #     weighted=True,  # for weighted random walks
-    #     seed=42,  # random seed fixed for reproducibility
-    # )
-
-    # string_walks = [[str(n) for n in walk] for walk in weighted_walks]
     end = time.time()
-    logger.info('Tempo das random Walks ' + str(end - start))
-    return string_walks
+    logger.info('Tempo de pre-processamento ' + str(end - start))
+    return transformed
+
+
+def string_transform(series):
+    pass
+
+
+def categorical_transform(series):
+    pass

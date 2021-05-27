@@ -47,29 +47,6 @@ def read_status():
     return {'message': 'Universe ON!'}
 
 
-@app.post('/update_db')
-@logger.catch()
-def update_db():
-    """
-    Puxa os dados do crawler e atualiza neo4j
-    (talvez python não seja a melhor linguagem)
-    """
-    source = 'Medium'
-    logger.info("Atualizando grafo do: " + source)
-
-    try:
-        logger.info('[*] Puxando dados do crawler')
-        response = requests.get(os.getenv('CRAWLER_URL'), stream=True)
-        response_txt = response.text
-        articles = json.loads(response_txt)
-        neo_client.populate_db(articles, source)
-
-    except Exception:
-        raise HTTPException(
-            status_code=404,
-            detail="Erro ao atualizar o banco e treinar modelo")
-
-
 @app.post('/retrain')
 @logger.catch()
 def retrain(db_json: dict):
@@ -84,12 +61,17 @@ def retrain(db_json: dict):
     edges_dataframe = neo_client.get_edges()
 
     logger.info('[2/x] Pre-processando dados')
-
+    preprocess_json = {"features": {"name": 'str',
+                                    "type": 'categorical',
+                                    'description': 'string',
+                                    'resource_type': 'categorial',
+                                    'slug': 'categorical'}}
     merged_df = pre_process.merge_dfs(dataframes)
+    transformed_df = pre_process.transform(merged_df, preprocess_json)
     logger.info('merged_df')
     logger.info(merged_df.head())
     graph = pre_process.create_graph(edges_dataframe,
-                                     nodes_df=merged_df)
+                                     nodes_df=transformed_df)
     logger.info("Grafo: ")
     logger.info(graph.info())
 
@@ -136,10 +118,10 @@ def get_emb(node_id: int, response: Response):
     #         detail=ex)
 
 
-@app.post('/terraform')
-def terraform(db_json: dict):
-    retrain()
-    # update_emb()
+# @app.post('/terraform')
+# def terraform(db_json: dict):
+#     retrain(db_json)
+#     update_emb()
 
 
 if __name__ == "__main__":
