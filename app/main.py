@@ -72,42 +72,20 @@ def update_db():
 
 @app.post('/retrain')
 @logger.catch()
-def retrain():
+def retrain(db_json: dict):
     """
     Retrain the model to update embeddings on neo4j.
     """
     logger.info('[!] Retreinando o modelo')
     logger.info('[1/x] Baixando dados do neo4j')
-    try:
-        users_dataframe = neo_client.get_nodes(
-            label='User', features_dict={'miniBio': str})
-        items_dataframe = neo_client.get_nodes(
-            label='Blog', features_dict={'description': str})
-        domains_dataframe = neo_client.get_nodes(
-            label='AREA', features_dict={'name': str})
-        interests_dataframe = neo_client.get_nodes(
-            label='INTEREST', features_dict={'name': str})
-        spaces_dataframe = neo_client.get_nodes(
-            label='Space', features_dict={'name': str})
-        sources_dataframe = neo_client.get_nodes(
-            label='Source', features_dict={'name': str})
-        shared_dataframe = neo_client.get_nodes(
-            label='Shared', features_dict={})
+    dataframes = [neo_client.get_nodes(collection)
+                  for collection in db_json["data"]]
 
-        edges_dataframe = neo_client.get_edges()
-    except Exception:
-        raise HTTPException(
-            status_code=404,
-            detail="Erro ao puxar dados do neo4j")
+    edges_dataframe = neo_client.get_edges()
+
     logger.info('[2/x] Pre-processando dados')
-    nodes_dfs_list = [users_dataframe,
-                      items_dataframe,
-                      domains_dataframe,
-                      interests_dataframe,
-                      spaces_dataframe,
-                      sources_dataframe,
-                      shared_dataframe]
-    merged_df = pre_process.merge_dfs(nodes_dfs_list)
+
+    merged_df = pre_process.merge_dfs(dataframes)
     logger.info('merged_df')
     logger.info(merged_df.head())
     graph = pre_process.create_graph(edges_dataframe,
@@ -120,18 +98,6 @@ def retrain():
     new_model, history = universe_client.train(epochs=3)
     figure = plot_history(history, return_figure=True)
     figure.savefig('loss.png')
-
-    # except Exception:
-    #     raise HTTPException(
-    #         status_code=404,
-    #         detail="Erro ao preprocessar dados")
-    # logger.info("[*] Salvando o modelo")
-    # try:
-    #     universe_client.save_model(new_model, model_path)
-    # except Exception:
-    #     raise HTTPException(
-    #         status_code=404,
-    #         detail="Erro ao salvar modelo")
 
 
 @app.post('/update_emb')
@@ -171,10 +137,9 @@ def get_emb(node_id: int, response: Response):
 
 
 @app.post('/terraform')
-def terraform():
-    update_db()
+def terraform(db_json: dict):
     retrain()
-    update_emb()
+    # update_emb()
 
 
 if __name__ == "__main__":
