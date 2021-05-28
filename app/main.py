@@ -61,15 +61,22 @@ def retrain(db_json: dict):
     edges_dataframe = neo_client.get_edges()
 
     logger.info('[2/x] Pre-processando dados')
-    preprocess_json = {"features": {"name": 'str',
+    preprocess_json = {"features": {"name": 'string',
                                     "type": 'categorical',
                                     'description': 'string',
                                     'resource_type': 'categorial',
                                     'slug': 'categorical'}}
     merged_df = pre_process.merge_dfs(dataframes)
-    transformed_df = pre_process.transform(merged_df, preprocess_json)
     logger.info('merged_df')
     logger.info(merged_df.head())
+
+    transformed_df = pre_process.transform(merged_df, preprocess_json)
+    logger.info('transformed_df')
+    logger.info(transformed_df.columns)
+    logger.info(transformed_df)
+    
+    transformed_df.to_csv('debug.csv')
+
     graph = pre_process.create_graph(edges_dataframe,
                                      nodes_df=transformed_df)
     logger.info("Grafo: ")
