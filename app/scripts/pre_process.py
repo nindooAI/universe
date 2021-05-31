@@ -14,6 +14,10 @@ def create_graph(edges_df, nodes_df):
     return graph
 
 
+def create_pseudo_labels(merged_df, edges_df):
+    pass
+
+
 def merge_dfs(nodes_dfs_list):
     return pd.concat(nodes_dfs_list).fillna(-1)
 
@@ -26,13 +30,14 @@ def transform(merged_df, preprocess_json):
     categorical_cols = []
     for key, value in preprocess_json["features"].items():
         if value == 'string':
-            feature_columns,tokenized, counter = string_transform(merged_df, key)
+            feature_columns, tokenized, counter = string_transform(
+                merged_df, key)
             transformed[feature_columns] = tokenized[feature_columns]
             transformed[key] = tokenized['tok_' + key]
         if value == 'categorical':
             codes, uniques = categorical_transform(
                 merged_df, key)
-            transformed[key] = codes
+            transformed['cat_'+key] = codes
         transformed = transformed.drop(columns=key)
 
     end = time.time()
@@ -51,15 +56,17 @@ def string_transform(dataframe, string_col):
     num = Numericalize(vocab)
 
     tok_df[tok_text_col] = tok_df[tok_text_col].apply(num)
+    max_len = max(tok_df[tok_text_col].apply(len))
+    feature_columns = [tok_text_col+str(i) for i in range(max_len)]
+
     tok_df[tok_text_col] = tok_df[tok_text_col].map(
-        lambda x: pad_chunk(x, pad_idx=0, pad_len=200, pad_first=False))
-    feature_columns = [tok_text_col+str(i) for i in range(200)]
+        lambda x: pad_chunk(x, pad_idx=-1, pad_len=max_len, pad_first=False))
     tok_df[tok_text_col] = tok_df[tok_text_col].apply(to_np)
 
     tok_df[feature_columns] = pd.DataFrame(
         tok_df[tok_text_col].tolist(), index=tok_df.index)
 
-    return feature_columns,tok_df, vocab
+    return feature_columns, tok_df, vocab
 
 
 def categorical_transform(dataframe, category_col):

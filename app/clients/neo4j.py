@@ -3,6 +3,7 @@ from py2neo.matching import NodeMatcher
 from py2neo.export import to_pandas_data_frame
 from loguru import logger
 import pandas as pd
+from itertools import islice
 
 
 @logger.catch()
@@ -22,9 +23,7 @@ class n4j_client():
         dataframe.index = dataframe[collection["unique_id"]]
         if "connections" in collection.keys():
             for connection in collection["connections"]:
-                print(connection)
                 for field in collection["connections"][connection]:
-                    print(field)
                     if field in features:
                         features.remove(field)
 
@@ -47,21 +46,31 @@ class n4j_client():
         edges = self.graph.run(pulling_query)
         return to_pandas_data_frame(edges)
 
-    def set_emb(self, node_id, embedding):
-        if type(node_id) == int:
+    def set_emb(self, nodes_id, nodes_embeddings):
+        logger.info("Atualizando embeddings no banco de dados")
+        if type(nodes_id) == int:
             set_query = """
                     MATCH (a)
-                    WHERE  ID(a) = $node_id
+                    WHERE  a.id = $node_id
                     SET a.embedding = $embedding
                     """
-        elif len(node_id) >= 1:
+        else:
             set_query = """
                     UNWIND $node_id as id
                     UNWIND $embedding as emb
                     MATCH (a)
-                    WHERE  ID(a) = id
+                    WHERE  a.id = id
                     SET a.embedding = emb
                     """
-        resposta = self.graph.run(
-            set_query, parameters={"node_id": node_id, "embedding": embedding})
-        return resposta
+        batch_size = 100
+        node_batch = []
+        emb_batch = []
+        count = 0
+        transaction = self.graph.begin()
+        for node_id, node_emb in zip(nodes_id, nodes_embeddings):
+            count += 1
+            node = self.node_matcher.match().where(id=node_id).first()
+            node["embedding"] = node_emb
+            transaction.merge(node)
+            if count % batch_size == 0:
+                self.graph.commit(transaction)

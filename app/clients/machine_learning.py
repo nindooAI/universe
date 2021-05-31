@@ -1,15 +1,17 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+from networkx.classes import graph
 from networkx.classes.graph import Graph
 import pandas as pd
 import numpy as np
 from loguru import logger
 from pandas.core.frame import DataFrame
+from stellargraph import data
 from stellargraph.layer import GraphSAGE, link_classification
 from stellargraph.mapper import (
     GraphSAGELinkGenerator,
-    FullBatchNodeGenerator
+    GraphSAGENodeGenerator,
 )
 from stellargraph.data import UniformRandomWalk
 from stellargraph.data import UnsupervisedSampler
@@ -17,7 +19,6 @@ from stellargraph.data import UnsupervisedSampler
 from tensorflow.keras import Model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
-from tensorflow.keras.losses import CosineSimilarity
 import tensorflow as tf
 from matplotlib import pyplot as plt
 from dotenv import load_dotenv
@@ -25,24 +26,47 @@ load_dotenv()
 
 
 class Universe():
-    def __init__(self, graph, n_walks=1, length=3, model_path=None, data_path=None):
-        self.graph = graph
+    def __init__(self, graph, model_path=None, data_path=None,
+                 n_walks=2, length=3, batch_size=500):
+
+        if data_path:
+            self.graph = self.load_data(data_path)
+        else:
+            self.graph = graph
+
+        if model_path:
+            self.model = self.load_model(model_path)
+        else:
+            self.model = None
 
         self.sampler = UnsupervisedSampler(
             self.graph, nodes=list(self.graph.nodes()),
             length=length, number_of_walks=n_walks)
 
         self.generator = GraphSAGELinkGenerator(self.graph,
-                                                batch_size=500,
+                                                batch_size=batch_size,
                                                 num_samples=[5, 5])
-        self.base_model = GraphSAGE(layer_sizes=[32, 32],
+        self.base_model = GraphSAGE(layer_sizes=[64, 64],
                                     generator=self.generator,
                                     bias=True, dropout=0.0, normalize="l2")
-        # if data_path:
-        #     DataFrame = pd.
+
+    def save_model(self, model, model_path):
+        # model.save(model_path)
+        pass
+
+    def load_model(self, model_path):
+        # return model
+        pass
+
+    def save_data(self, model, data_path):
+        pass
+
+    def load_data(self, data_path):
+        # return stellar_graph
+        pass
 
     @logger.catch
-    def train(self, epochs=1):
+    def train(self, epochs=2):
 
         x_in, x_out = self.base_model.in_out_tensors()
 
@@ -54,7 +78,7 @@ class Universe():
         model = tf.keras.Model(inputs=x_in, outputs=prediction)
 
         model.compile(
-            optimizer=tf.keras.optimizers.Adam(lr=1e-3),
+            optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
             loss=tf.keras.losses.binary_crossentropy,
             metrics=["binary_accuracy"],
         )
@@ -66,50 +90,23 @@ class Universe():
             use_multiprocessing=True,
             workers=4,
             callbacks=[es])
-        # x_emb_in, x_emb_out = self.base_model.in_out_tensors()
-        # emb_model = Model(inputs=x_emb_in, outputs=x_emb_out)
-        # x_emb_in, x_emb_out = self.base_model.in_out_tensors()
-        # # for full batch models, squeeze out the batch dim (which is 1)
-        # if self.generator.num_batch_dims() == 2:
-        #     x_emb_out = tf.squeeze(x_emb_out, axis=0)
-        # fullbatch_generator = FullBatchNodeGenerator(self.graph, sparse=False)
-        # embeddings = emb_model.predict(
-        #     fullbatch_generator.flow(self.graph.nodes()))
-        # trans = TSNE(n_components=2)
-        # emb_transformed = pd.DataFrame(
-        #     trans.fit_transform(embeddings), index=self.graph.nodes())
-        # # so we need to get everything lined up correctly
-        # ordered_test_subjects = reorder(test_gen, test_subjects)
-        # ordered_train_subjects = reorder(train_gen, train_subjects)
 
-        # lr = LogisticRegression(multi_class="auto", solver="lbfgs")
-        # lr.fit(train_embeddings, ordered_train_subjects)
+        x_in_src = x_in[0::2]
+        x_out_src = x_out[0]
+        self.emb_model = tf.keras.Model(inputs=x_in_src, outputs=x_out_src)
 
-        # y_pred = lr.predict(test_embeddings)
-        # acc = (y_pred == ordered_test_subjects).mean()
-        return model, history
+        return history
 
     @ logger.catch
     def update_emb(self):
-        logger.info('Atualizando embs')
-        # Retrieve node embeddings and corresponding subjects
-        node_ids = self.base_model.wv.index_to_key  # list of node IDs
-        # the gensim ordering may not match the StellarGraph one, so rearrange
-        int_ids = [int(node) for node in node_ids]
-
-        embs = [list(map(float, list(self.base_model.wv[str(node)])))
-                for node in int_ids]
-        return embs, int_ids
+        logger.info("[*] Gerando Embeddings para todos os nós")
+        ids = list(self.graph.nodes())
+        emb = self.emb_model.predict(GraphSAGENodeGenerator(
+            self.graph, batch_size=500, num_samples=[5, 5]).flow(ids)).tolist()
+        return ids, emb
 
     @ logger.catch
     def gen_emb(self, neighboors):
         array = neighboors[0][0]
         emb = np.mean(array, axis=0).tolist()
         return emb
-
-    def save_model(self, model, model_path):
-        model.save(model_path)
-
-    def load_model(self, model_path):
-        model = Word2Vec.load(model_path)
-        return model

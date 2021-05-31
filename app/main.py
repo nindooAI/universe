@@ -1,5 +1,6 @@
 import matplotlib
 from dotenv import load_dotenv
+from matplotlib.pyplot import plot
 import requests
 import json
 import os
@@ -8,12 +9,13 @@ from clients.machine_learning import Universe
 from scripts import pre_process
 from clients.neo4j import n4j_client
 from scripts.utils import make_dirs
+from scripts.interpret import plot_emb
 from stellargraph.utils import plot_history
 import uvicorn
 from fastapi import FastAPI, Response, status, HTTPException
 from stellargraph.utils import history, plot_history
 load_dotenv()
-matplotlib.pyplot.switch_backend('Agg')
+# matplotlib.pyplot.switch_backend('Agg')
 
 # Iniciando logs
 log_format = "{time} | {level} | {message} | {file} | {line} | {function} | {exception}"
@@ -74,7 +76,7 @@ def retrain(db_json: dict):
     logger.info('transformed_df')
     logger.info(transformed_df.columns)
     logger.info(transformed_df)
-    
+
     transformed_df.to_csv('debug.csv')
 
     graph = pre_process.create_graph(edges_dataframe,
@@ -84,9 +86,12 @@ def retrain(db_json: dict):
 
     universe_client = Universe(graph=graph)
     logger.info("[3/x] Treinando modelo")
-    new_model, history = universe_client.train(epochs=3)
+    history = universe_client.train()
     figure = plot_history(history, return_figure=True)
-    figure.savefig('loss.png')
+    # figure.savefig('loss.png')
+    # plot_emb(universe_client)
+    nodes_ids, nodes_embs = universe_client.update_emb()
+    neo_client.set_emb(nodes_ids, nodes_embs)
 
 
 @app.post('/update_emb')
@@ -133,4 +138,15 @@ def get_emb(node_id: int, response: Response):
 
 if __name__ == "__main__":
     # Run app with uvicorn with port and host specified. Host needed for docker port mapping
-    uvicorn.run(app, port=8000, host="0.0.0.0")
+
+    # uvicorn.run(app, port=8000, host="0.0.0.0")
+    retrain({"data": [
+        {"collection": "lessons", "unique_id": "id", "features": [
+            "type", "name", "theme_id"], "connections":{"themes": ["lesson-themes", "theme_id"]}},
+        {"collection": "data", "unique_id": "id", "features": [
+                                            "resource_type", "resource_id", "lesson_id"], "connections":{"lessons": ["data-lesson", "lesson_id"]}},
+        {"collection": "courses", "unique_id": "id", "features": [
+            "name", "description", "slug"]},
+        {"collection": "themes", "unique_id": "id", "features": [
+            "name", "course_id", "type"], "connections":{"courses": ["themes-course", "course_id"]}}
+    ]})
