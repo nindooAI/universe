@@ -27,7 +27,7 @@ load_dotenv()
 
 class Universe():
     def __init__(self, graph, model_path=None, data_path=None,
-                 n_walks=2, length=3, batch_size=500):
+                 n_walks=1, length=2, batch_size=500):
 
         if data_path:
             self.graph = self.load_data(data_path)

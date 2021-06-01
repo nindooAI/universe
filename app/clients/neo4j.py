@@ -4,6 +4,7 @@ from py2neo.export import to_pandas_data_frame
 from loguru import logger
 import pandas as pd
 from itertools import islice
+from py2neo.bulk import merge_nodes
 
 
 @logger.catch()
@@ -47,7 +48,7 @@ class n4j_client():
         return to_pandas_data_frame(edges)
 
     def set_emb(self, nodes_id, nodes_embeddings):
-        logger.info("Atualizando embeddings no banco de dados")
+        logger.info("[*] Atualizando embeddings no banco de dados")
         if type(nodes_id) == int:
             set_query = """
                     MATCH (a)
@@ -56,21 +57,31 @@ class n4j_client():
                     """
         else:
             set_query = """
-                    UNWIND $node_id as id
-                    UNWIND $embedding as emb
+                    UNWIND $node_batch as id
+                    UNWIND $emb_batch as emb
                     MATCH (a)
                     WHERE  a.id = id
                     SET a.embedding = emb
                     """
         batch_size = 100
-        node_batch = []
-        emb_batch = []
+        node_batch, emb_batch = [], []
         count = 0
         transaction = self.graph.begin()
         for node_id, node_emb in zip(nodes_id, nodes_embeddings):
             count += 1
-            node = self.node_matcher.match().where(id=node_id).first()
-            node["embedding"] = node_emb
-            transaction.merge(node)
+            node_batch.append(node_id)
+            emb_batch.append(node_emb)
             if count % batch_size == 0:
-                self.graph.commit(transaction)
+                logger.info(
+                    "Nós sendo atualizados {count}/{total}".format(count=count,
+                                                                   total=len(nodes_id)))
+                transaction.run(set_query, parameters={
+                                "node_batch": node_batch,
+                                "emb_batch": emb_batch})
+                transaction.commit()
+                node_batch, emb_batch = [], []
+                transaction = self.graph.begin()
+        transaction.run(set_query, parameters={
+                        "node_batch": node_batch,
+                        "emb_batch": emb_batch})
+        transaction.commit()
