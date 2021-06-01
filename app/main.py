@@ -41,10 +41,10 @@ model_config = {"bucket_path": "recomendation",
 
 data_path = './data/'
 dev_dir = os.path.join([data_path, 'dev'])
-model_dir = './data/models/'
-dash_path = os.path.join([data_path, 'dash'])
+model_dir = os.path.join([data_path, 'model'])
+dash_dir = os.path.join([data_path, 'dash'])
 
-directories_list = [data_path, model_dir,dev_dir]
+directories_list = [data_path, model_dir, dev_dir]
 
 make_dirs(directories_list)
 
@@ -152,5 +152,5 @@ def get_emb(node_list: list):
 
 if __name__ == "__main__":
     # Run app with uvicorn with port and host specified. Host needed for docker port mapping
-    
+
     uvicorn.run(app, port=8000, host="0.0.0.0")
