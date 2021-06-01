@@ -49,39 +49,24 @@ class n4j_client():
 
     def set_emb(self, nodes_id, nodes_embeddings):
         logger.info("[*] Atualizando embeddings no banco de dados")
-        if type(nodes_id) == int:
-            set_query = """
-                    MATCH (a)
-                    WHERE  a.id = $node_id
-                    SET a.embedding = $embedding
-                    """
-        else:
-            set_query = """
-                    UNWIND $node_batch as id
-                    UNWIND $emb_batch as emb
-                    MATCH (a)
-                    WHERE  a.id = id
-                    SET a.embedding = emb
-                    """
         batch_size = 100
-        node_batch, emb_batch = [], []
         count = 0
         transaction = self.graph.begin()
         for node_id, node_emb in zip(nodes_id, nodes_embeddings):
             count += 1
-            node_batch.append(node_id)
-            emb_batch.append(node_emb)
-            if count % batch_size == 0:
+            node = self.node_matcher.match().where(id=node_id).first()
+            label = list(node.labels)[0]
+            set_query = """
+                    MATCH (a:{label})
+                    WHERE  a.id = $node_id
+                    SET a.embedding = $node_emb
+                    """.format(label = label)
+            transaction.run(set_query, parameters={
+                            "node_id": node_id,
+                            "node_emb": node_emb})
+            if count % batch_size == 0 or count == len(nodes_id):
                 logger.info(
                     "Nós sendo atualizados {count}/{total}".format(count=count,
                                                                    total=len(nodes_id)))
-                transaction.run(set_query, parameters={
-                                "node_batch": node_batch,
-                                "emb_batch": emb_batch})
                 transaction.commit()
-                node_batch, emb_batch = [], []
                 transaction = self.graph.begin()
-        transaction.run(set_query, parameters={
-                        "node_batch": node_batch,
-                        "emb_batch": emb_batch})
-        transaction.commit()
