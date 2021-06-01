@@ -4,3 +4,7 @@
 log_files/
 notebooks/
 __pycache__/
+data/
+.DS_Store
+*.csv
+*.png

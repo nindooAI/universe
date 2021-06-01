@@ -30,4 +30,4 @@ def plot_emb(Universe):
             transform.__name__
         )
     )
-    plt.show()
+    return fig

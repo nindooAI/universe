@@ -47,7 +47,7 @@ class n4j_client():
         edges = self.graph.run(pulling_query)
         return to_pandas_data_frame(edges)
 
-    def set_emb(self, nodes_id, nodes_embeddings):
+    def set_emb(self, nodes_id: list, nodes_embeddings: list):
         logger.info("[*] Atualizando embeddings no banco de dados")
         batch_size = 100
         count = 0
@@ -60,7 +60,7 @@ class n4j_client():
                     MATCH (a:{label})
                     WHERE  a.id = $node_id
                     SET a.embedding = $node_emb
-                    """.format(label = label)
+                    """.format(label=label)
             transaction.run(set_query, parameters={
                             "node_id": node_id,
                             "node_emb": node_emb})
@@ -70,3 +70,13 @@ class n4j_client():
                                                                    total=len(nodes_id)))
                 transaction.commit()
                 transaction = self.graph.begin()
+
+    def get_neighboors(self, node_list):
+        neighboors = [list(self.graph.run("""
+                MATCH (a)-[*1]-(b)
+                WHERE  ID(a) = $nid
+                return collect(b.id)
+                """, parameters={"nid": int(node_id)}))
+            for node_id in node_list]
+
+        return neighboors

@@ -43,12 +43,16 @@ class Universe():
             self.graph, nodes=list(self.graph.nodes()),
             length=length, number_of_walks=n_walks)
 
-        self.generator = GraphSAGELinkGenerator(self.graph,
-                                                batch_size=batch_size,
-                                                num_samples=[5, 5])
+        self.base_generator = GraphSAGELinkGenerator(self.graph,
+                                                     batch_size=batch_size,
+                                                     num_samples=[5, 5])
         self.base_model = GraphSAGE(layer_sizes=[64, 64],
-                                    generator=self.generator,
+                                    generator=self.base_generator,
                                     bias=True, dropout=0.0, normalize="l2")
+
+        self.emb_generator = GraphSAGENodeGenerator(self.graph,
+                                                    batch_size=batch_size,
+                                                    num_samples=[5, 5])
 
     def save_model(self, model, model_path):
         # model.save(model_path)
@@ -70,7 +74,7 @@ class Universe():
 
         x_in, x_out = self.base_model.in_out_tensors()
 
-        train_gen = self.generator.flow(self.sampler)
+        train_gen = self.base_generator.flow(self.sampler)
 
         prediction = link_classification(output_dim=1, output_act="sigmoid",
                                          edge_embedding_method="ip")(x_out)
@@ -101,8 +105,7 @@ class Universe():
     def update_emb(self):
         logger.info("[*] Gerando Embeddings para todos os nós")
         ids = list(self.graph.nodes())
-        emb = self.emb_model.predict(GraphSAGENodeGenerator(
-            self.graph, batch_size=500, num_samples=[5, 5]).flow(ids)).tolist()
+        emb = self.emb_model.predict(self.emb_generator.flow(ids)).tolist()
         return ids, emb
 
     @ logger.catch
