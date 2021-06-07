@@ -40,9 +40,9 @@ model_config = {"bucket_path": "recomendation",
                 "data_path": "data", "model_path": "models"}
 
 data_path = './data/'
-dev_dir = os.path.join([data_path, 'dev'])
-model_dir = os.path.join([data_path, 'model'])
-dash_dir = os.path.join([data_path, 'dash'])
+dev_dir = os.path.join(data_path, 'dev')
+model_dir = os.path.join(data_path, 'model')
+dash_dir = os.path.join(data_path, 'dash')
 
 directories_list = [data_path, model_dir, dev_dir]
 
@@ -110,10 +110,10 @@ def retrain(db_json: dict):
     history = universe_client.train()
 
     loss_figure = plot_history(history, return_figure=True)
-    loss_figure.savefig(os.path.join(dash_path, 'loss.png'))
+    loss_figure.savefig(os.path.join(dash_dir, 'loss.png'))
 
     emb_figure = plot_emb(universe_client)
-    emb_figure.savefig(os.path.join(dash_path, 'emb.png'))
+    emb_figure.savefig(os.path.join(dash_dir, 'emb.png'))
 
     nodes_ids, nodes_embs = universe_client.update_emb()
     neo_client.set_emb(nodes_ids, nodes_embs)
