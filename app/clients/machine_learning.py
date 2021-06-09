@@ -4,6 +4,7 @@
 from networkx.classes import graph
 from networkx.classes.graph import Graph
 import pandas as pd
+import os
 import numpy as np
 from loguru import logger
 from pandas.core.frame import DataFrame
@@ -13,6 +14,7 @@ from stellargraph.mapper import (
     GraphSAGELinkGenerator,
     GraphSAGENodeGenerator,
 )
+from scripts import pre_process
 from stellargraph.data import UniformRandomWalk
 from stellargraph.data import UnsupervisedSampler
 
@@ -26,18 +28,12 @@ load_dotenv()
 
 
 class Universe():
-    def __init__(self, graph, model_path=None, data_path=None,
+    def __init__(self, graph=None, model_path=None, data_path=None,
                  n_walks=1, length=2, batch_size=500):
 
-        if data_path:
-            self.graph = self.load_data(data_path)
-        else:
-            self.graph = graph
-
         if model_path:
-            self.model = self.load_model(model_path)
-        else:
-            self.model = None
+            self.graph = self.load_data(data_path)
+            self.emb_model = self.load_model(model_path)
 
         self.sampler = UnsupervisedSampler(
             self.graph, nodes=list(self.graph.nodes()),
@@ -59,24 +55,30 @@ class Universe():
         pass
 
     def load_model(self, model_path):
-        # return model
-        pass
+        return tf.keras.models.load_model(model_path)
 
     def save_data(self, model, data_path):
         pass
 
     def load_data(self, data_path):
-        # return stellar_graph
-        pass
+        edges_dataframe = pd.read_csv(
+            os.path.join(data_path, 'edges.csv'))
+        transformed_df = pd.read_csv(
+            os.path.join(data_path, 'nodes.csv'), index_col='id')
+        print(transformed_df.head())
+        print(edges_dataframe.head())
+        stellar_graph=pre_process.create_graph(edges_dataframe,
+                                                 nodes_df = transformed_df)
+        return stellar_graph
 
-    @logger.catch
-    def train(self, epochs=2):
+    @ logger.catch
+    def train(self, graph, epochs = 2):
+        self.graph=graph
+        x_in, x_out=self.base_model.in_out_tensors()
 
-        x_in, x_out = self.base_model.in_out_tensors()
+        train_gen=self.base_generator.flow(self.sampler)
 
-        train_gen = self.base_generator.flow(self.sampler)
-
-        prediction = link_classification(output_dim=1, output_act="sigmoid",
+        prediction=link_classification(output_dim = 1, output_act = "sigmoid",
                                          edge_embedding_method="ip")(x_out)
 
         model = tf.keras.Model(inputs=x_in, outputs=prediction)
