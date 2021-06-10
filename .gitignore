@@ -1,6 +1,10 @@
 .env
 .vscode/
-*ipynb_checkpoints/
-*/logs
-./notebooks/
-*/__pycache__/
+.ipynb_checkpoints/
+log_files/
+notebooks/
+__pycache__/
+data/
+.DS_Store
+*.csv
+*.png

@@ -1,41 +1,73 @@
+from genericpath import exists
+import matplotlib
 from dotenv import load_dotenv
+from matplotlib.pyplot import plot
+import pandas as pd
 import requests
 import json
 import os
 from loguru import logger
-from scripts.machine_learning import Universe
-from scripts.pre_process import pre_process
-from clients.n4j_client import n4j_client
+from clients.machine_learning import Universe
+from scripts import pre_process
+from clients.neo4j import n4j_client
 from scripts.utils import make_dirs
+from scripts.interpret import plot_emb
+from stellargraph.utils import plot_history
 import uvicorn
 from fastapi import FastAPI, Response, status, HTTPException
+from stellargraph.utils import plot_history
+matplotlib.pyplot.switch_backend('Agg')
 load_dotenv()
+
 
 # Iniciando logs
 log_format = "{time} | {level} | {message} | {file} | {line} | {function} | {exception}"
 logger.add(sink='./data/log_files/universe.log',
            backtrace=True, format=log_format, level='DEBUG')
 
+config = {"data": [
+    {"collection": "lessons", "unique_id": "id", "features": [
+        "type", "name", "parent_id"],
+     "connections":[{"themes": ["lesson-theme", "parent_id"]}]},
+    {"collection": "courses", "unique_id": "id", "features": [
+        "name", "description", "slug"]},
+    {"collection": "themes", "unique_id": "id", "features": [
+        "name", "parent_id", "type"],
+     "connections":[{"courses": ["themes-course", "parent_id"]}]},
+    {"collection": "users", "unique_id": "id", "features": [],
+     "connections":[{"courses": ["users-courses", "course_id"]},
+                    {"themes": ["users-themes", "course_id"]}]}
+],
+    "model": {"model_path": "data/model/", "graph_path": "data/model/"},
+    "preprocess": {"features": {"name": "string",
+                                "type": "categorical",
+                                "description": "string",
+                                "slug": "categorical"}}
+}
 data_path = './data/'
-model_dir = './data/models/'
-model_path = './data/models/node2vec.model'
-directories_list = [data_path, model_dir]
+dev_dir = os.path.join(data_path, 'dev')
+model_dir = os.path.join(data_path, 'model')
+dash_dir = os.path.join(data_path, 'dash')
+
+directories_list = [data_path, model_dir, dev_dir, dash_dir]
 
 make_dirs(directories_list)
 
+model_config = config['model']
+model_path = os.path.join(
+    model_config['model_path'], 'recomendation.model')
+
 # Iniciando a instancia da API
-app = FastAPI(title='Universe API', version='0.1',
+app = FastAPI(title='Universe API', version='0.2',
               description='API com diversas funcoes do nindoo universe')
 
 
 neo_client = n4j_client(connection_string=os.getenv(
     "N4J_URL"), user=os.getenv("N4J_USER"), password=os.getenv("N4J_PASS"))
 
-universe_client = Universe(model_path=model_path)
 
-
-@app.get('/')
-@app.get('/status')
+@ app.get('/')
+@ app.get('/status')
 def read_status():
     """
     Retorna status da API: ON ou OFF
@@ -45,110 +77,88 @@ def read_status():
     return {'message': 'Universe ON!'}
 
 
-@app.post('/update_db')
-@logger.catch()
-def update_db():
-    """
-    Puxa os dados do crawler e atualiza neo4j
-    (talvez python não seja a melhor linguagem)
-    """
-    source = 'Medium'
-    logger.info("Atualizando grafo do: " + source)
-
-    try:
-        logger.info('[*] Puxando dados do crawler')
-
-        # response = requests.get(os.getenv('CRAWLER_URL'), stream=True)
-        with open('/Users/jpmc/Nindoo/Whitelabel/universe/app/index.html', 'r') as f:
-            response = f.read()
-        response_txt = response
-        articles = json.loads(response_txt)
-        neo_client.populate_db(articles, source)
-
-    except Exception:
-        raise HTTPException(
-            status_code=404,
-            detail="Erro ao atualizar o banco e treinar modelo")
-
-    retrain()
-
-
-@app.post('/retrain')
-@logger.catch()
-def retrain():
+@ app.post('/retrain')
+@ logger.catch()
+def retrain(db_json: dict):
     """
     Retrain the model to update embeddings on neo4j.
     """
-    logger.info('Retreinando o modelo')
-    logger.info('[*] Baixando dados do neo4j')
-    try:
-        nodes = neo_client.get_all_nodes()
-    except Exception:
-        raise HTTPException(
-            status_code=404,
-            detail="Erro ao puxar dados do neo4j")
-    try:
-        string_walks = pre_process(nodes)
-    except Exception:
-        raise HTTPException(
-            status_code=404,
-            detail="Erro ao preprocessar dados")
 
-    logger.info('Iniciando treino')
-    try:
-        new_model = universe_client.train(string_walks)
-    except Exception:
-        raise HTTPException(
-            status_code=404,
-            detail="Erro ao preprocessar dados")
+    logger.info('[!] Retreinando o modelo')
+    logger.info('[1/x] Baixando dados do neo4j')
+    dataframes = [neo_client.get_nodes(collection)
+                  for collection in db_json["data"]]
 
-    logger.info("[*] Salvando o modelo")
-    try:
-        universe_client.save_model(new_model, model_path)
-    except Exception:
-        raise HTTPException(
-            status_code=404,
-            detail="Erro ao salvar modelo")
+    edges_dataframe = neo_client.get_edges()
 
-    update_emb()
+    logger.info('[2/x] Pre-processando dados')
+    merged_df = pre_process.merge_dfs(dataframes)
+    transformed_df = pre_process.transform(
+        merged_df, config["preprocess"])
+    logger.info('[x] Dataframe pré-processado')
+    logger.info(transformed_df.columns)
+    logger.info(transformed_df)
+
+    logger.info('[*] Salvando grafos')
+    transformed_df.to_csv(os.path.join(
+        model_config['graph_path'], 'nodes.csv'))
+    edges_dataframe.to_csv(os.path.join(
+        model_config['graph_path'], 'edges.csv'))
+
+    global universe_client
+    universe_client = Universe(edges_csv=os.path.join(
+        model_config['graph_path'], 'edges.csv'),
+        nodes_csv=os.path.join(
+        model_config['graph_path'], 'nodes.csv'))
+
+    logger.info("[3/x] Treinando modelo")
+    history = universe_client.train()
+
+    logger.info('[!] Salvando o modelo')
+    universe_client.emb_model.save(model_path)
+
+    loss_figure = plot_history(history, return_figure=True)
+    loss_figure.savefig(os.path.join(dash_dir, 'loss.png'))
+
+    emb_figure = plot_emb(universe_client)
+    emb_figure.savefig(os.path.join(dash_dir, 'emb.png'))
+
+    nodes_ids, nodes_embs = universe_client.update_emb()
+    neo_client.set_emb(nodes_ids, nodes_embs)
 
 
-@app.post('/update_emb')
-@logger.catch()
+@ app.post('/update_emb')
+@ logger.catch()
 # gera emedding e deolve para o banco
 def update_emb():
     logger.info('[*] Atualizando embeddings para neo4j')
-    try:
-        embs, int_ids = universe_client.update_emb()
-        queries = neo_client.set_emb(int_ids, embs)
-    except Exception:
-        raise HTTPException(
-            status_code=404,
-            detail="Erro ao tentar atualizar os embeddings no neo4j")
-
-    return {"message", "Embeddings atualizados"}
+    nodes_ids, nodes_embs = universe_client.update_emb()
+    neo_client.set_emb(nodes_ids, nodes_embs)
 
 
-@logger.catch()
-@app.post('/get_emb')
-def get_emb(node_id: int, response: Response ):
-    logger.info('Gerando embedding para nó de ID' + str(node_id))
-    # try:
-    neighboors = list(neo_client.graph.run("""
-            MATCH (a)-[*1]-(b)
-            WHERE  ID(a) = $nid
-            return collect(b.embedding)
-            """, parameters={"nid": int(node_id)}))
-    emb = universe_client.gen_emb(neighboors)
-    neo_client.set_emb(node_id, emb)
+@ logger.catch()
+@ app.post('/get_emb')
+def get_emb(node_list: list):
+    logger.info('Gerando embedding para nós de IDs únicos:' + str(node_list))
+    node_features = neo_client.get_node_features(node_list)
+    ids = [node['id'] for node in node_features]
+    neighboors = neo_client.get_neighboors(node_list)
+    universe_client.update_graph(node_features, neighboors)
+    embs = universe_client.gen_emb(ids)
+    print(embs)
+    neo_client.set_emb(node_list, embs)
     return {'message': "Embedding criado"}
-    # except Exception as ex:
-    #     response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-    #     return HTTPException(
-    #         status_code=response.status_code,
-    #         detail=ex)
 
+
+retrain(config)
+if os.path.exists(model_path):
+    universe_client = Universe(
+        edges_csv=os.path.join(model_config['graph_path'], 'edges.csv'),
+        nodes_csv=os.path.join(model_config['graph_path'], 'nodes.csv'),
+        model_path=model_path)
+else:
+    retrain(config)
 
 if __name__ == "__main__":
-    # Run app with uvicorn with port and host specified. Host needed for docker port mapping
+
     uvicorn.run(app, port=8000, host="0.0.0.0")
