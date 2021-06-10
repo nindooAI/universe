@@ -1,53 +1,61 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-from networkx.classes import graph
-from networkx.classes.graph import Graph
+from fastcore.test import test
+from networkx.classes.function import edges
+from scripts import pre_process
+from dotenv import load_dotenv
+import tensorflow as tf
+from tensorflow.keras.callbacks import EarlyStopping
 import pandas as pd
 import os
 import numpy as np
 from loguru import logger
 from pandas.core.frame import DataFrame
-from stellargraph import data
+import stellargraph
 from stellargraph.layer import GraphSAGE, link_classification
 from stellargraph.mapper import (
     GraphSAGELinkGenerator,
     GraphSAGENodeGenerator,
 )
-from scripts import pre_process
-from stellargraph.data import UniformRandomWalk
+import stellargraph as sg
 from stellargraph.data import UnsupervisedSampler
 
-from tensorflow.keras import Model
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import EarlyStopping
-import tensorflow as tf
-from matplotlib import pyplot as plt
-from dotenv import load_dotenv
+
 load_dotenv()
 
 
 class Universe():
-    def __init__(self, graph=None, model_path=None, data_path=None,
+    def __init__(self, edges_csv, nodes_csv, model_path=None, data_path=None,
                  n_walks=1, length=2, batch_size=500):
 
         if model_path:
-            self.graph = self.load_data(data_path)
+            logger.info(
+                '[!] Carregando modelos e dados salvos da última versão.')
             self.emb_model = self.load_model(model_path)
+
+        self.batch_size = batch_size
+        self.edges_df = pd.read_csv(edges_csv)
+        self.online_edges = self.edges_df.copy()
+
+        self.transformed_df = pd.read_csv(nodes_csv, index_col='id')
+        self.online_features = self.transformed_df.copy()
+        self.graph = sg.StellarGraph(self.transformed_df, edges=self.edges_df)
+        self.online_graph = self.graph
 
         self.sampler = UnsupervisedSampler(
             self.graph, nodes=list(self.graph.nodes()),
             length=length, number_of_walks=n_walks)
 
         self.base_generator = GraphSAGELinkGenerator(self.graph,
-                                                     batch_size=batch_size,
+                                                     batch_size=self.batch_size,
                                                      num_samples=[5, 5])
         self.base_model = GraphSAGE(layer_sizes=[64, 64],
                                     generator=self.base_generator,
                                     bias=True, dropout=0.0, normalize="l2")
 
         self.emb_generator = GraphSAGENodeGenerator(self.graph,
-                                                    batch_size=batch_size,
+                                                    batch_size=self.batch_size,
                                                     num_samples=[5, 5])
 
     def save_model(self, model, model_path):
@@ -60,25 +68,14 @@ class Universe():
     def save_data(self, model, data_path):
         pass
 
-    def load_data(self, data_path):
-        edges_dataframe = pd.read_csv(
-            os.path.join(data_path, 'edges.csv'))
-        transformed_df = pd.read_csv(
-            os.path.join(data_path, 'nodes.csv'), index_col='id')
-        print(transformed_df.head())
-        print(edges_dataframe.head())
-        stellar_graph=pre_process.create_graph(edges_dataframe,
-                                                 nodes_df = transformed_df)
-        return stellar_graph
-
     @ logger.catch
-    def train(self, graph, epochs = 2):
-        self.graph=graph
-        x_in, x_out=self.base_model.in_out_tensors()
+    def train(self, graph, epochs=2):
+        self.graph = graph
+        x_in, x_out = self.base_model.in_out_tensors()
 
-        train_gen=self.base_generator.flow(self.sampler)
+        train_gen = self.base_generator.flow(self.sampler)
 
-        prediction=link_classification(output_dim = 1, output_act = "sigmoid",
+        prediction = link_classification(output_dim=1, output_act="sigmoid",
                                          edge_embedding_method="ip")(x_out)
 
         model = tf.keras.Model(inputs=x_in, outputs=prediction)
@@ -111,7 +108,37 @@ class Universe():
         return ids, emb
 
     @ logger.catch
-    def gen_emb(self, neighboors):
-        array = neighboors[0][0]
-        emb = np.mean(array, axis=0).tolist()
-        return emb
+    def gen_emb(self, ids):
+        online_emb_generator = GraphSAGENodeGenerator(self.online_graph,
+                                                      batch_size=self.batch_size,
+                                                      num_samples=[5, 5])
+        embs = self.emb_model.predict(online_emb_generator.flow(ids)).tolist()
+        return embs
+
+    def update_graph(self, node_features, neighboors):
+        ids = [node['id'] for node in node_features]
+        neighboors = [entry['neighboors'] for entry in neighboors[0]]
+        logger.info(self.transformed_df.shape)
+        new_features_df = pd.DataFrame([[-1 for i in self.transformed_df.columns]],
+                                       index=ids, columns=self.transformed_df.columns)
+        self.online_features = pd.concat(
+            [self.transformed_df, new_features_df])
+        logger.debug(self.transformed_df.shape)
+        logger.debug(self.online_features.shape)
+
+        new_edges = []
+        for node_id, node_neighboors in zip(ids, neighboors):
+            for neighboor in node_neighboors:
+                new_edges.append([node_id, neighboor])
+
+        new_edges_df = pd.DataFrame(
+            new_edges, columns=self.edges_df.columns[1:])
+        logger.debug(self.edges_df.shape)
+        self.online_edges = pd.concat(
+            [self.edges_df, new_edges_df], ignore_index=True)
+        logger.debug(self.online_edges.shape)
+
+        self.online_graph = sg.StellarGraph(
+            self.online_features, edges=self.online_edges)
+        logger.debug(self.online_graph.info())
+        

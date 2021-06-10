@@ -33,14 +33,17 @@ config = {"data": [
         "name", "description", "slug"]},
     {"collection": "themes", "unique_id": "id", "features": [
         "name", "course_id", "type"],
-     "connections":{"courses": ["themes-course", "course_id"]}}
-],
+     "connections":{"courses": ["themes-courses", "course_id"]}},
+    {"collection": "users", "unique_id": "id", "features": [],
+     "connections":[{"courses": ["users-courses", "course_id"]},
+                    {"courses": ["users-courses", "course_id"]}]}
+    ],
     "model": {"model_path": 'data/model/', 'graph_path': 'data/model/'},
     "preprocess": {"features": {"name": 'string',
                                 "type": 'categorical',
                                 'description': 'string',
                                 'slug': 'categorical'}}
-}
+    }
 data_path = './data/'
 dev_dir = os.path.join(data_path, 'dev')
 model_dir = os.path.join(data_path, 'model')
@@ -53,8 +56,6 @@ make_dirs(directories_list)
 model_config = config['model']
 model_path = os.path.join(
     model_config['model_path'], 'recomendation.model')
-nodes_csv = os.path.join(model_config['graph_path'], 'nodes.csv')
-edges_csv = os.path.join(model_config['graph_path'], 'edges.csv')
 
 # Iniciando a instancia da API
 app = FastAPI(title='Universe API', version='0.2',
@@ -99,18 +100,17 @@ def retrain(db_json: dict):
     logger.info(transformed_df)
 
     logger.info('[*] Salvando grafos')
-    transformed_df.to_csv(nodes_csv)
-    edges_dataframe.to_csv(edges_csv)
-
-    graph = pre_process.create_graph(edges_df=edges_dataframe,
-                                     nodes_df=transformed_df)
-    logger.info(graph.info())
+    transformed_df.to_csv(os.path.join(
+        model_config['graph_path'], 'nodes.csv'))
+    edges_dataframe.to_csv(os.path.join(
+        model_config['graph_path'], 'nodes.csv'))
 
     global universe_client
-    universe_client = Universe()
+    universe_client = Universe(edges_df=edges_dataframe,
+                               nodes_df=transformed_df)
 
     logger.info("[3/x] Treinando modelo")
-    history = universe_client.train(graph)
+    history = universe_client.train()
 
     logger.info('[!] Salvando o modelo')
     universe_client.emb_model.save(model_path)
@@ -137,14 +137,12 @@ def update_emb():
 @ logger.catch()
 @ app.post('/get_emb')
 def get_emb(node_list: list):
-    logger.info('Gerando embedding para nós de ID' + str(node_list))
+    logger.info('Gerando embedding para nós de IDs únicos:' + str(node_list))
     node_features = neo_client.get_node_features(node_list)
+    ids = [node['id'] for node in node_features]
     neighboors = neo_client.get_neighboors(node_list)
-    print(neighboors)
-    graph_features = pre_process.create_features(node_features)
-    print(graph_features)
-    universe_client.update_graph(graph_features, neighboors)
-    embs = universe_client.gen_emb(node_list)
+    universe_client.update_graph(node_features, neighboors)
+    embs = universe_client.gen_emb(ids)
     print(embs)
     neo_client.set_emb(node_list, embs)
     return {'message': "Embedding criado"}
@@ -152,12 +150,12 @@ def get_emb(node_list: list):
 
 if os.path.exists(model_path):
     universe_client = Universe(
-        data_path=config["model"]["graph_path"],
+        edges_csv=os.path.join(model_config['graph_path'], 'edges.csv'),
+        nodes_csv=os.path.join(model_config['graph_path'], 'nodes.csv'),
         model_path=model_path)
 else:
     retrain(config)
 
 if __name__ == "__main__":
-    # Run app with uvicorn with port and host specified. Host needed for docker port mapping
 
     uvicorn.run(app, port=8000, host="0.0.0.0")
