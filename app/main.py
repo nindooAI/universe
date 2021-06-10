@@ -27,23 +27,23 @@ logger.add(sink='./data/log_files/universe.log',
 
 config = {"data": [
     {"collection": "lessons", "unique_id": "id", "features": [
-        "type", "name", "theme_id"],
-     "connections":{"themes": ["lesson-themes", "theme_id"]}},
+        "type", "name", "parent_id"],
+     "connections":[{"themes": ["lesson-theme", "parent_id"]}]},
     {"collection": "courses", "unique_id": "id", "features": [
         "name", "description", "slug"]},
     {"collection": "themes", "unique_id": "id", "features": [
-        "name", "course_id", "type"],
-     "connections":{"courses": ["themes-courses", "course_id"]}},
+        "name", "parent_id", "type"],
+     "connections":[{"courses": ["themes-course", "parent_id"]}]},
     {"collection": "users", "unique_id": "id", "features": [],
      "connections":[{"courses": ["users-courses", "course_id"]},
-                    {"courses": ["users-courses", "course_id"]}]}
-    ],
-    "model": {"model_path": 'data/model/', 'graph_path': 'data/model/'},
-    "preprocess": {"features": {"name": 'string',
-                                "type": 'categorical',
-                                'description': 'string',
-                                'slug': 'categorical'}}
-    }
+                    {"themes": ["users-themes", "course_id"]}]}
+],
+    "model": {"model_path": "data/model/", "graph_path": "data/model/"},
+    "preprocess": {"features": {"name": "string",
+                                "type": "categorical",
+                                "description": "string",
+                                "slug": "categorical"}}
+}
 data_path = './data/'
 dev_dir = os.path.join(data_path, 'dev')
 model_dir = os.path.join(data_path, 'model')
@@ -103,11 +103,13 @@ def retrain(db_json: dict):
     transformed_df.to_csv(os.path.join(
         model_config['graph_path'], 'nodes.csv'))
     edges_dataframe.to_csv(os.path.join(
-        model_config['graph_path'], 'nodes.csv'))
+        model_config['graph_path'], 'edges.csv'))
 
     global universe_client
-    universe_client = Universe(edges_df=edges_dataframe,
-                               nodes_df=transformed_df)
+    universe_client = Universe(edges_csv=os.path.join(
+        model_config['graph_path'], 'edges.csv'),
+        nodes_csv=os.path.join(
+        model_config['graph_path'], 'nodes.csv'))
 
     logger.info("[3/x] Treinando modelo")
     history = universe_client.train()
@@ -148,6 +150,7 @@ def get_emb(node_list: list):
     return {'message': "Embedding criado"}
 
 
+retrain(config)
 if os.path.exists(model_path):
     universe_client = Universe(
         edges_csv=os.path.join(model_config['graph_path'], 'edges.csv'),

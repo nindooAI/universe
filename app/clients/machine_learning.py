@@ -27,7 +27,7 @@ load_dotenv()
 
 class Universe():
     def __init__(self, edges_csv, nodes_csv, model_path=None, data_path=None,
-                 n_walks=1, length=2, batch_size=500):
+                 n_walks=3, length=4, batch_size=1000):
 
         if model_path:
             logger.info(
@@ -69,8 +69,7 @@ class Universe():
         pass
 
     @ logger.catch
-    def train(self, graph, epochs=2):
-        self.graph = graph
+    def train(self, epochs=2):
         x_in, x_out = self.base_model.in_out_tensors()
 
         train_gen = self.base_generator.flow(self.sampler)
@@ -141,4 +140,3 @@ class Universe():
         self.online_graph = sg.StellarGraph(
             self.online_features, edges=self.online_edges)
         logger.debug(self.online_graph.info())
-        
