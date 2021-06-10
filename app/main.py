@@ -1,6 +1,8 @@
+from genericpath import exists
 import matplotlib
 from dotenv import load_dotenv
 from matplotlib.pyplot import plot
+import pandas as pd
 import requests
 import json
 import os
@@ -14,42 +16,49 @@ from stellargraph.utils import plot_history
 import uvicorn
 from fastapi import FastAPI, Response, status, HTTPException
 from stellargraph.utils import plot_history
-load_dotenv()
 matplotlib.pyplot.switch_backend('Agg')
+load_dotenv()
+
 
 # Iniciando logs
 log_format = "{time} | {level} | {message} | {file} | {line} | {function} | {exception}"
 logger.add(sink='./data/log_files/universe.log',
            backtrace=True, format=log_format, level='DEBUG')
 
-data_config = {"data": [
+config = {"data": [
     {"collection": "lessons", "unique_id": "id", "features": [
-        "type", "name", "theme_id"],
-     "connections":{"themes": ["lesson-themes", "theme_id"]}},
-    {"collection": "data", "unique_id": "id", "features": [
-        "resource_type", "resource_id", "lesson_id"],
-     "connections":{"lessons": ["data-lesson", "lesson_id"]}},
+        "type", "name", "parent_id"],
+     "connections":[{"themes": ["lesson-theme", "parent_id"]}]},
     {"collection": "courses", "unique_id": "id", "features": [
         "name", "description", "slug"]},
     {"collection": "themes", "unique_id": "id", "features": [
-        "name", "course_id", "type"],
-     "connections":{"courses": ["themes-course", "course_id"]}}
-]}
-
-model_config = {"bucket_path": "recomendation",
-                "data_path": "data", "model_path": "models"}
-
+        "name", "parent_id", "type"],
+     "connections":[{"courses": ["themes-course", "parent_id"]}]},
+    {"collection": "users", "unique_id": "id", "features": [],
+     "connections":[{"courses": ["users-courses", "course_id"]},
+                    {"themes": ["users-themes", "course_id"]}]}
+],
+    "model": {"model_path": "data/model/", "graph_path": "data/model/"},
+    "preprocess": {"features": {"name": "string",
+                                "type": "categorical",
+                                "description": "string",
+                                "slug": "categorical"}}
+}
 data_path = './data/'
 dev_dir = os.path.join(data_path, 'dev')
 model_dir = os.path.join(data_path, 'model')
 dash_dir = os.path.join(data_path, 'dash')
 
-directories_list = [data_path, model_dir, dev_dir]
+directories_list = [data_path, model_dir, dev_dir, dash_dir]
 
 make_dirs(directories_list)
 
+model_config = config['model']
+model_path = os.path.join(
+    model_config['model_path'], 'recomendation.model')
+
 # Iniciando a instancia da API
-app = FastAPI(title='Universe API', version='0.1',
+app = FastAPI(title='Universe API', version='0.2',
               description='API com diversas funcoes do nindoo universe')
 
 
@@ -74,6 +83,7 @@ def retrain(db_json: dict):
     """
     Retrain the model to update embeddings on neo4j.
     """
+
     logger.info('[!] Retreinando o modelo')
     logger.info('[1/x] Baixando dados do neo4j')
     dataframes = [neo_client.get_nodes(collection)
@@ -82,32 +92,30 @@ def retrain(db_json: dict):
     edges_dataframe = neo_client.get_edges()
 
     logger.info('[2/x] Pre-processando dados')
-    preprocess_json = {"features": {"name": 'string',
-                                    "type": 'categorical',
-                                    'description': 'string',
-                                    'resource_type': 'categorial',
-                                    'slug': 'categorical'}}
     merged_df = pre_process.merge_dfs(dataframes)
-    logger.info('merged_df')
-    logger.info(merged_df.head())
-
-    transformed_df = pre_process.transform(merged_df, preprocess_json)
-    logger.info('transformed_df')
+    transformed_df = pre_process.transform(
+        merged_df, config["preprocess"])
+    logger.info('[x] Dataframe pré-processado')
     logger.info(transformed_df.columns)
     logger.info(transformed_df)
 
-    # transformed_df.to_csv('debug.csv')
-
-    graph = pre_process.create_graph(edges_dataframe,
-                                     nodes_df=transformed_df)
-    logger.info("Grafo: ")
-    logger.info(graph.info())
+    logger.info('[*] Salvando grafos')
+    transformed_df.to_csv(os.path.join(
+        model_config['graph_path'], 'nodes.csv'))
+    edges_dataframe.to_csv(os.path.join(
+        model_config['graph_path'], 'edges.csv'))
 
     global universe_client
-    universe_client = Universe(graph=graph)
+    universe_client = Universe(edges_csv=os.path.join(
+        model_config['graph_path'], 'edges.csv'),
+        nodes_csv=os.path.join(
+        model_config['graph_path'], 'nodes.csv'))
 
     logger.info("[3/x] Treinando modelo")
     history = universe_client.train()
+
+    logger.info('[!] Salvando o modelo')
+    universe_client.emb_model.save(model_path)
 
     loss_figure = plot_history(history, return_figure=True)
     loss_figure.savefig(os.path.join(dash_dir, 'loss.png'))
@@ -128,29 +136,29 @@ def update_emb():
     neo_client.set_emb(nodes_ids, nodes_embs)
 
 
-@logger.catch()
-@app.post('/get_emb')
+@ logger.catch()
+@ app.post('/get_emb')
 def get_emb(node_list: list):
-    logger.info('Gerando embedding para nós de ID' + str(node_list))
+    logger.info('Gerando embedding para nós de IDs únicos:' + str(node_list))
     node_features = neo_client.get_node_features(node_list)
+    ids = [node['id'] for node in node_features]
     neighboors = neo_client.get_neighboors(node_list)
-    print(neighboors)
-    graph_features = pre_process.create_features(node_features)
-    print(graph_features)
-    universe_client.update_graph(graph_features, neighboors)
-    embs = universe_client.gen_emb(node_list)
+    universe_client.update_graph(node_features, neighboors)
+    embs = universe_client.gen_emb(ids)
     print(embs)
     neo_client.set_emb(node_list, embs)
     return {'message': "Embedding criado"}
 
 
-# @app.post('/terraform')
-# def terraform(db_json: dict):
-#     retrain(db_json)
-#     update_emb()
-
+retrain(config)
+if os.path.exists(model_path):
+    universe_client = Universe(
+        edges_csv=os.path.join(model_config['graph_path'], 'edges.csv'),
+        nodes_csv=os.path.join(model_config['graph_path'], 'nodes.csv'),
+        model_path=model_path)
+else:
+    retrain(config)
 
 if __name__ == "__main__":
-    # Run app with uvicorn with port and host specified. Host needed for docker port mapping
 
     uvicorn.run(app, port=8000, host="0.0.0.0")

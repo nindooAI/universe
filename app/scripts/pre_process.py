@@ -28,9 +28,10 @@ def transform(merged_df, preprocess_json):
     logger.info('Pre-processando colunas do dataframe total')
     string_cols = []
     categorical_cols = []
+    assets = {}
     for key, value in preprocess_json["features"].items():
         if value == 'string':
-            feature_columns, tokenized, counter = string_transform(
+            feature_columns, tokenized, vocab = string_transform(
                 merged_df, key)
             transformed[feature_columns] = tokenized[feature_columns]
             transformed[key] = tokenized['tok_' + key]
@@ -72,3 +73,7 @@ def string_transform(dataframe, string_col):
 def categorical_transform(dataframe, category_col):
     codes, uniques = pd.factorize(dataframe[category_col], sort=False)
     return codes, uniques
+
+
+def create_features(node_list,pre_process_config):
+    pass

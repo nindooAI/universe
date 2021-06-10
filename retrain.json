@@ -1,6 +1,18 @@
-{"data":[
-    {"collection":"lessons","unique_id":"id","features":["type","name","theme_id"],"connections":{"themes":["lesson-themes","theme_id"]}},
-    {"collection":"data","unique_id":"id","features":["resource_type","resource_id","lesson_id"],"connections":{"lessons":["data-lesson","lesson_id"]}},
-    {"collection":"courses","unique_id":"id","features":["name","description","slug"]},
-    {"collection":"themes","unique_id":"id","features":["name","course_id","type"],"connections":{"courses":["themes-course","course_id"]}}
-]}
+{"data": [
+    {"collection": "lessons", "unique_id": "id", "features": [
+        "type", "name", "parent_id"],
+     "connections":[{"themes": ["lesson-theme", "parent_id"]}]},
+    {"collection": "courses", "unique_id": "id", "features": [
+        "name", "description", "slug"]},
+    {"collection": "themes", "unique_id": "id", "features": [
+        "name", "parent_id", "type"],
+     "connections":[{"courses": ["themes-course", "parent_id"]}]},
+    {"collection": "users", "unique_id": "id", "features": [],
+     "connections":[{"courses": ["users-courses", "course_id"]},
+                    {"themes": ["users-themes", "course_id"]}]}
+],
+    "model": {"model_path": "data/model/", "graph_path": "data/model/"},
+    "preprocess": {"features": {"name": "string",
+                                "type": "categorical",
+                                "description": "string",
+                                "slug": "categorical"}}}

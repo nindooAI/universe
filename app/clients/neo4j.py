@@ -18,23 +18,27 @@ class n4j_client():
 
     def get_nodes(self, collection):
         label = collection["collection"]
+        print(label)
         features = collection["features"]
         nodes = self.node_matcher.match(label).all()
         dataframe = to_pandas_data_frame(nodes)
         dataframe.index = dataframe[collection["unique_id"]]
         if "connections" in collection.keys():
-            for connection in collection["connections"]:
-                for field in collection["connections"][connection]:
-                    if field in features:
-                        features.remove(field)
-
+            for connections in collection["connections"]:
+                for connection in connections.values():
+                    for field in connection:
+                        if field in features:
+                            features.remove(field)
+        print(features)
         if len(features) > 0:
             features_dataframe = dataframe[features]
+        else:
+            features_dataframe = pd.DataFrame(index=dataframe.index)
 
-        cols = [col for col in features_dataframe.columns if '_id' not in col]
+        cols = [col for col in features_dataframe.columns if '_id' not in col or 'embedding' not in col]
         clean_dataframe = features_dataframe[cols]
 
-        logger.info(' - '.join(['Dataframe raw', label]))
+        logger.info(' - '.join(['Dataframe clean', label]))
         logger.info(clean_dataframe.head())
 
         return clean_dataframe
@@ -49,7 +53,7 @@ class n4j_client():
 
     def set_emb(self, nodes_id: list, nodes_embeddings: list):
         logger.info("[*] Atualizando embeddings no banco de dados")
-        batch_size = 100
+        batch_size = 1000
         count = 0
         transaction = self.graph.begin()
         for node_id, node_emb in zip(nodes_id, nodes_embeddings):
@@ -74,9 +78,15 @@ class n4j_client():
     def get_neighboors(self, node_list):
         neighboors = [list(self.graph.run("""
                 MATCH (a)-[*1]-(b)
-                WHERE  ID(a) = $nid
-                return collect(b.id)
-                """, parameters={"nid": int(node_id)}))
+                WHERE  a.id = $nid
+                return collect(b.id) as neighboors
+                """, parameters={"nid": node_id}))
             for node_id in node_list]
 
         return neighboors
+
+    def get_node_features(self, node_list):
+        nodes = [self.node_matcher.match().where(id=node_id).first()
+                 for node_id in node_list]
+
+        return nodes
