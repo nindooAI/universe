@@ -18,7 +18,6 @@ class n4j_client():
 
     def get_nodes(self, collection):
         label = collection["collection"]
-        print(label)
         features = collection["features"]
         nodes = self.node_matcher.match(label).all()
         dataframe = to_pandas_data_frame(nodes)
@@ -29,13 +28,14 @@ class n4j_client():
                     for field in connection:
                         if field in features:
                             features.remove(field)
-        print(features)
         if len(features) > 0:
             features_dataframe = dataframe[features]
         else:
             features_dataframe = pd.DataFrame(index=dataframe.index)
 
-        cols = [col for col in features_dataframe.columns if '_id' not in col or 'embedding' not in col]
+        cols = [
+            col for col in features_dataframe.columns
+            if '_id' not in col or 'embedding' not in col]
         clean_dataframe = features_dataframe[cols]
 
         logger.info(' - '.join(['Dataframe clean', label]))
@@ -43,12 +43,15 @@ class n4j_client():
 
         return clean_dataframe
 
-    def get_edges(self):
+    def get_edges(self, data):
+        labels = [entry["collection"] for entry in data]
         pulling_query = """
                     MATCH (a)-->(b)
+                    WHERE any(label in labels(a) WHERE label in $labels) \
+                        and any(label in labels(b) WHERE label in $labels)
                     RETURN a.id AS source, b.id AS target
                     """
-        edges = self.graph.run(pulling_query)
+        edges = self.graph.run(pulling_query, parameters={"labels": labels})
         return to_pandas_data_frame(edges)
 
     def set_emb(self, nodes_id: list, nodes_embeddings: list):

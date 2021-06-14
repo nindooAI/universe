@@ -1,4 +1,5 @@
 from genericpath import exists
+from logging import log
 import matplotlib
 from dotenv import load_dotenv
 from matplotlib.pyplot import plot
@@ -73,7 +74,7 @@ def read_status():
     Retorna status da API: ON ou OFF
     :return: Dicionario com chave 'message' e estado da api
     """
-    logger.debug('Usuario verificou estado da API')
+    logger.info('Usuario verificou estado da API')
     return {'message': 'Universe ON!'}
 
 
@@ -83,15 +84,18 @@ def retrain(db_json: dict):
     """
     Retrain the model to update embeddings on neo4j.
     """
-
+    data = db_json["data"]
     logger.info('[!] Retreinando o modelo')
     logger.info('[1/x] Baixando dados do neo4j')
     dataframes = [neo_client.get_nodes(collection)
-                  for collection in db_json["data"]]
-
-    edges_dataframe = neo_client.get_edges()
+                  for collection in data]
 
     logger.info('[2/x] Pre-processando dados')
+
+    edges_dataframe = neo_client.get_edges(data)
+    logger.info('[x] Datafrmae de ligações')
+    logger.info(edges_dataframe.head)
+
     merged_df = pre_process.merge_dfs(dataframes)
     transformed_df = pre_process.transform(
         merged_df, config["preprocess"])
@@ -105,6 +109,7 @@ def retrain(db_json: dict):
     edges_dataframe.to_csv(os.path.join(
         model_config['graph_path'], 'edges.csv'))
 
+    
     global universe_client
     universe_client = Universe(edges_csv=os.path.join(
         model_config['graph_path'], 'edges.csv'),

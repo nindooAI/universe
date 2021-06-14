@@ -122,8 +122,6 @@ class Universe():
                                        index=ids, columns=self.transformed_df.columns)
         self.online_features = pd.concat(
             [self.transformed_df, new_features_df])
-        logger.debug(self.transformed_df.shape)
-        logger.debug(self.online_features.shape)
 
         new_edges = []
         for node_id, node_neighboors in zip(ids, neighboors):
@@ -132,11 +130,8 @@ class Universe():
 
         new_edges_df = pd.DataFrame(
             new_edges, columns=self.edges_df.columns[1:])
-        logger.debug(self.edges_df.shape)
         self.online_edges = pd.concat(
             [self.edges_df, new_edges_df], ignore_index=True)
-        logger.debug(self.online_edges.shape)
 
         self.online_graph = sg.StellarGraph(
             self.online_features, edges=self.online_edges)
-        logger.debug(self.online_graph.info())
