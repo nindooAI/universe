@@ -1,5 +1,5 @@
 from genericpath import exists
-from logging import log
+from logging import Logger, log
 import matplotlib
 from dotenv import load_dotenv
 from matplotlib.pyplot import plot
@@ -26,25 +26,6 @@ log_format = "{time} | {level} | {message} | {file} | {line} | {function} | {exc
 logger.add(sink='./data/log_files/universe.log',
            backtrace=True, format=log_format, level='DEBUG')
 
-config = {"data": [
-    {"collection": "lessons", "unique_id": "id", "features": [
-        "type", "name", "parent_id"],
-     "connections":[{"themes": ["lesson-theme", "parent_id"]}]},
-    {"collection": "courses", "unique_id": "id", "features": [
-        "name", "description", "slug"]},
-    {"collection": "themes", "unique_id": "id", "features": [
-        "name", "parent_id", "type"],
-     "connections":[{"courses": ["themes-course", "parent_id"]}]},
-    {"collection": "users", "unique_id": "id", "features": [],
-     "connections":[{"courses": ["users-courses", "course_id"]},
-                    {"themes": ["users-themes", "course_id"]}]}
-],
-    "model": {"model_path": "data/model/", "graph_path": "data/model/"},
-    "preprocess": {"features": {"name": "string",
-                                "type": "categorical",
-                                "description": "string",
-                                "slug": "categorical"}}
-}
 data_path = './data/'
 dev_dir = os.path.join(data_path, 'dev')
 model_dir = os.path.join(data_path, 'model')
@@ -54,17 +35,13 @@ directories_list = [data_path, model_dir, dev_dir, dash_dir]
 
 make_dirs(directories_list)
 
-model_config = config['model']
-model_path = os.path.join(
-    model_config['model_path'], 'recomendation.model')
-
-# Iniciando a instancia da API
-app = FastAPI(title='Universe API', version='0.2',
-              description='API com diversas funcoes do nindoo universe')
-
 
 neo_client = n4j_client(connection_string=os.getenv(
     "N4J_URL"), user=os.getenv("N4J_USER"), password=os.getenv("N4J_PASS"))
+
+
+app = FastAPI(title='Universe API', version='0.2',
+              description='API com diversas funcoes do nindoo universe')
 
 
 @ app.get('/')
@@ -80,11 +57,15 @@ def read_status():
 
 @ app.post('/retrain')
 @ logger.catch()
-def retrain(db_json: dict):
+def retrain(config: dict, from_api=True):
     """
     Retrain the model to update embeddings on neo4j.
     """
-    data = db_json["data"]
+    model_config = config['model']
+    model_path = os.path.join(
+        model_config['model_path'], 'recomendation.model')
+
+    data = config["data"]
     logger.info('[!] Retreinando o modelo')
     logger.info('[1/x] Baixando dados do neo4j')
     dataframes = [neo_client.get_nodes(collection)
@@ -109,8 +90,6 @@ def retrain(db_json: dict):
     edges_dataframe.to_csv(os.path.join(
         model_config['graph_path'], 'edges.csv'))
 
-    
-    global universe_client
     universe_client = Universe(edges_csv=os.path.join(
         model_config['graph_path'], 'edges.csv'),
         nodes_csv=os.path.join(
@@ -130,6 +109,13 @@ def retrain(db_json: dict):
 
     nodes_ids, nodes_embs = universe_client.update_emb()
     neo_client.set_emb(nodes_ids, nodes_embs)
+
+    if not from_api:
+        return universe_client
+    else:
+        return {'message': 'Retreino concluído'}
+
+    # logger.info('[x] Treino finalizado e banco de dados atualizado.')
 
 
 @ app.post('/update_emb')
@@ -155,14 +141,27 @@ def get_emb(node_list: list):
     return {'message': "Embedding criado"}
 
 
-retrain(config)
-if os.path.exists(model_path):
-    universe_client = Universe(
-        edges_csv=os.path.join(model_config['graph_path'], 'edges.csv'),
-        nodes_csv=os.path.join(model_config['graph_path'], 'nodes.csv'),
-        model_path=model_path)
-else:
-    retrain(config)
+def ml_init(config):
+    try:
+        model_config = config['model']
+        model_path = os.path.join(
+            model_config['model_path'], 'recomendation.model')
+        if os.path.exists(model_path):
+            universe_client = Universe(
+                edges_csv=os.path.join(
+                    model_config['graph_path'], 'edges.csv'),
+                nodes_csv=os.path.join(
+                    model_config['graph_path'], 'nodes.csv'),
+                model_path=model_path)
+            return universe_client
+        else:
+            universe_client = retrain(config, from_api=False)
+    except Exception as error:
+        logger.error('Erro ao iniciar o client de machine learning.')
+        logger.error(error)
+
+
+universe_client = ml_init(config=json.loads(os.getenv("CONFIG")))
 
 if __name__ == "__main__":
 

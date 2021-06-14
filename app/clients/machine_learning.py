@@ -26,7 +26,7 @@ load_dotenv()
 
 
 class Universe():
-    def __init__(self, edges_csv, nodes_csv, model_path=None, data_path=None,
+    def __init__(self, edges_csv=None, nodes_csv=None, model_path=None,
                  n_walks=3, length=4, batch_size=1000):
 
         if model_path:
@@ -34,15 +34,15 @@ class Universe():
                 '[!] Carregando modelos e dados salvos da última versão.')
             self.emb_model = self.load_model(model_path)
 
-        self.batch_size = batch_size
         self.edges_df = pd.read_csv(edges_csv)
         self.online_edges = self.edges_df.copy()
-
         self.transformed_df = pd.read_csv(nodes_csv, index_col='id')
         self.online_features = self.transformed_df.copy()
-        self.graph = sg.StellarGraph(self.transformed_df, edges=self.edges_df)
+        self.graph = sg.StellarGraph(
+            self.transformed_df, edges=self.edges_df)
         self.online_graph = self.graph
 
+        self.batch_size = batch_size
         self.sampler = UnsupervisedSampler(
             self.graph, nodes=list(self.graph.nodes()),
             length=length, number_of_walks=n_walks)
