@@ -1,18 +1,9 @@
 #!/usr/bin/env python
 # coding: utf-8
-
-from fastcore.test import test
-from networkx.classes.function import edges
-from scripts import pre_process
-from dotenv import load_dotenv
 import tensorflow as tf
 from tensorflow.keras.callbacks import EarlyStopping
 import pandas as pd
-import os
-import numpy as np
 from loguru import logger
-from pandas.core.frame import DataFrame
-import stellargraph
 from stellargraph.layer import GraphSAGE, link_classification
 from stellargraph.mapper import (
     GraphSAGELinkGenerator,
@@ -20,9 +11,6 @@ from stellargraph.mapper import (
 )
 import stellargraph as sg
 from stellargraph.data import UnsupervisedSampler
-
-
-load_dotenv()
 
 
 class Universe():

@@ -1,11 +1,8 @@
-from stellargraph.core import graph
 from py2neo import Graph, Node, Relationship
 from py2neo.matching import NodeMatcher
 from py2neo.export import to_pandas_data_frame
 from loguru import logger
 import pandas as pd
-from itertools import islice
-from py2neo.bulk import merge_nodes
 
 
 @logger.catch()
@@ -54,7 +51,7 @@ class n4j_client():
                     """
         edges = self.graph.run(pulling_query, parameters={"labels": labels})
         return to_pandas_data_frame(edges)
-
+    @logger.catch()
     def set_emb(self, nodes_id: list, nodes_embeddings: list):
         logger.info("[*] Atualizando embeddings no banco de dados")
         batch_size = 1000
@@ -63,7 +60,10 @@ class n4j_client():
         for node_id, node_emb in zip(nodes_id, nodes_embeddings):
             count += 1
             node = self.node_matcher.match().where(id=node_id).first()
-            label = list(node.labels)[0]
+            try:
+                label = list(node.labels)[0]
+            except AttributeError:
+                logger.error(node_id)
             set_query = """
                     MATCH (a:{label})
                     WHERE  a.id = $node_id

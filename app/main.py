@@ -1,22 +1,17 @@
-from genericpath import exists
-from logging import Logger, log
-import matplotlib
 from dotenv import load_dotenv
-from matplotlib.pyplot import plot
-import pandas as pd
-import requests
 import json
+import matplotlib
 import os
-from loguru import logger
-from clients.machine_learning import Universe
-from scripts import pre_process
-from clients.neo4j import n4j_client
-from scripts.utils import make_dirs
-from scripts.interpret import plot_emb
-from stellargraph.utils import plot_history
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from loguru import logger
 from stellargraph.utils import plot_history
+from stellargraph.utils import plot_history
+from clients.machine_learning import Universe
+from clients.neo4j import n4j_client
+from scripts import pre_process
+from scripts.utils import make_dirs
+from scripts.interpret import plot_emb
 from pydantic import BaseModel
 
 matplotlib.pyplot.switch_backend('Agg')
@@ -171,7 +166,9 @@ async def get_recommendations(node_list: list, label_list: list, limit: int):
         node_features = neo_client.get_node_features(node_list)
         ids = [node['id'] for node in node_features]
         neighboors = neo_client.get_neighboors(node_list)
-        universe_client.update_graph(ids, node_features, neighboors)
+        new_ids = [new_id for new_id in ids \
+            if new_id not in universe_client.online_features.index]
+        universe_client.update_graph(new_ids, node_features, neighboors)
         embs = universe_client.gen_emb(ids)
         neo_client.set_emb(node_list, embs)
         logger.info('[*] Buscando recomendações')
