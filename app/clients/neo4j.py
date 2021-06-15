@@ -1,3 +1,4 @@
+from stellargraph.core import graph
 from py2neo import Graph, Node, Relationship
 from py2neo.matching import NodeMatcher
 from py2neo.export import to_pandas_data_frame
@@ -93,3 +94,29 @@ class n4j_client():
                  for node_id in node_list]
 
         return nodes
+
+    @logger.catch()
+    def get_recommendations(self, node_list, label_list, limit=15):
+        recommendation_query = """
+            MATCH (a)-[*..2]-(b)
+            WHERE a.id = $id AND EXISTS (a.embedding) AND EXISTS(b.embedding)
+            RETURN b.id as id,labels(b) as label
+            ORDER BY apoc.algo.cosineSimilarity(a.embedding,b.embedding)
+            LIMIT $limit
+        """
+        results = [to_pandas_data_frame(self.graph.run(recommendation_query,
+                                                       parameters={"id": node_id, "limit": limit}))
+                   for node_id in node_list]
+        recommendations = []
+        for result in results:
+            node_rec = {}
+            for index, row in result.iterrows():
+                for label in row['label']:
+                    try:
+                        node_rec[label].append(row['id'])
+                    except KeyError:
+                        node_rec[label] = []
+                        node_rec[label].append(row['id'])
+            recommendations.append(node_rec)
+
+        return recommendations

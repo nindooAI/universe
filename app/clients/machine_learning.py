@@ -114,12 +114,12 @@ class Universe():
         embs = self.emb_model.predict(online_emb_generator.flow(ids)).tolist()
         return embs
 
-    def update_graph(self, node_features, neighboors):
-        ids = [node['id'] for node in node_features]
+    def update_graph(self, ids, node_features, neighboors):
         neighboors = [entry['neighboors'] for entry in neighboors[0]]
-        logger.info(self.transformed_df.shape)
+
         new_features_df = pd.DataFrame([[-1 for i in self.transformed_df.columns]],
                                        index=ids, columns=self.transformed_df.columns)
+
         self.online_features = pd.concat(
             [self.transformed_df, new_features_df])
 
