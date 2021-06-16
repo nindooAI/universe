@@ -1,6 +1,5 @@
 import boto3
 import progressbar
-import os
 
 from loguru import logger
 

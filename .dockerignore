@@ -5,3 +5,4 @@
 ./notebooks/
 ./scripts
 ./__pycache__/
+data/
