@@ -1,3 +1,4 @@
+import collections
 from dotenv import load_dotenv
 import json
 import matplotlib
@@ -80,28 +81,36 @@ def retrain(config: dict, from_api=True):
     """
     try:
         model_config = config["model"]
-        model_path = os.path.join(model_config["model_path"], "recomendation.model")
+        model_path = os.path.join(
+            model_config["model_path"], "recomendation.model")
 
         data = config["data"]
         logger.info("[!] Retreinando o modelo")
         logger.info("[1/x] Baixando dados do neo4j")
-        dataframes = [neo_client.get_nodes(collection) for collection in data]
+        nodes_labels = [collection['collection'] for collection in data]
+        for collection in data:
+            if "nodes" in list(collection.keys()):
+                nodes_labels.extend(list(collection["nodes"].keys()))
+        print(nodes_labels)
+        dataframes = [neo_client.get_nodes(label,data) for label in nodes_labels]
 
         logger.info("[2/x] Pre-processando dados")
 
-        edges_dataframe = neo_client.get_edges(data)
+        edges_dataframe = neo_client.get_edges(nodes_labels)
         logger.info("[x] Datafrmae de ligações")
         logger.info(edges_dataframe.head)
 
         merged_df = pre_process.merge_dfs(dataframes)
-        transformed_df = pre_process.transform(merged_df, config["preprocess"])
+        transformed_df = pre_process.transform(merged_df, data)
         logger.info("[x] Dataframe pré-processado")
         logger.info(transformed_df.columns)
         logger.info(transformed_df)
 
         logger.info("[*] Salvando grafos")
-        transformed_df.to_csv(os.path.join(model_config["graph_path"], "nodes.csv"))
-        edges_dataframe.to_csv(os.path.join(model_config["graph_path"], "edges.csv"))
+        transformed_df.to_csv(os.path.join(
+            model_config["graph_path"], "nodes.csv"))
+        edges_dataframe.to_csv(os.path.join(
+            model_config["graph_path"], "edges.csv"))
 
         universe_client = Universe(
             edges_csv=os.path.join(model_config["graph_path"], "edges.csv"),
@@ -165,18 +174,19 @@ class recOut(BaseModel):
 @app.post("/recommendation", response_model=recOut)
 async def get_recommendations(node_list: list, label_list: list, limit: int):
     try:
-        logger.info("Gerando embedding para nós de IDs únicos:" + str(node_list))
-        node_features = neo_client.get_node_features(node_list)
-        ids = [node["id"] for node in node_features]
-        neighboors = neo_client.get_neighboors(node_list)
+        logger.info(
+            "Gerando embedding para nós de IDs únicos:" + str(node_list))
+        node_features = neo_client.get_node_features(node_list,label_list)
+        unique_ids = [node.identity for node in node_features]
+        neighboors = neo_client.get_neighboors(node_list,label_list)
         new_ids = [
             new_id
-            for new_id in ids
+            for new_id in unique_ids
             if new_id not in universe_client.online_features.index
         ]
         universe_client.update_graph(new_ids, node_features, neighboors)
-        embs = universe_client.gen_emb(ids)
-        neo_client.set_emb(node_list, embs)
+        embs = universe_client.gen_emb(unique_ids)
+        neo_client.set_emb(unique_ids, embs)
         logger.info("[*] Buscando recomendações")
         recommendations = neo_client.get_recommendations(
             node_list, label_list, limit=limit
@@ -192,24 +202,27 @@ async def get_recommendations(node_list: list, label_list: list, limit: int):
     else:
         logger.info("[x] Recomendações geradas.")
         logger.info(recommendations)
-        return {"unique_ids": ids, "rec_ids": recommendations}
+        return {"unique_ids": node_list, "rec_ids": recommendations}
 
 
 @logger.catch()
 def ml_init(config):
     try:
         model_config = config["model"]
-        model_path = os.path.join(model_config["model_path"], "recomendation.model")
+        model_path = os.path.join(
+            model_config["model_path"], "recomendation.model")
         if os.path.exists(model_path):
             universe_client = Universe(
-                edges_csv=os.path.join(model_config["graph_path"], "edges.csv"),
-                nodes_csv=os.path.join(model_config["graph_path"], "nodes.csv"),
+                edges_csv=os.path.join(
+                    model_config["graph_path"], "edges.csv"),
+                nodes_csv=os.path.join(
+                    model_config["graph_path"], "nodes.csv"),
                 model_path=model_path,
             )
             return universe_client
         else:
             return retrain(config, from_api=False)
-        
+
     except Exception as error:
         logger.error("Erro ao iniciar o client de machine learning.")
         logger.error(error)

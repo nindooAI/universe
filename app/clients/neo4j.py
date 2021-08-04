@@ -14,12 +14,20 @@ class n4j_client():
     def to_data(self, result):
         return result.data()
 
-    def get_nodes(self, collection):
-        label = collection["collection"]
-        features = collection["features"]
+    @logger.catch
+    def get_nodes(self, label, data):
+        for collection in data:
+            collections = [collection["collection"] for collection in data]
+            if label in collections and label not in list(collection["nodes"].keys()):
+                features = collection["features"]
+            else:
+                features = collection["nodes"][label]["features"]
+
         nodes = self.node_matcher.match(label).all()
         dataframe = to_pandas_data_frame(nodes)
-        dataframe.index = dataframe[collection["unique_id"]]
+        nodes_ids = [node.identity for node in nodes]
+        dataframe.index = nodes_ids
+
         if "connections" in collection.keys():
             for connections in collection["connections"]:
                 for connection in connections.values():
@@ -28,8 +36,9 @@ class n4j_client():
                             features.remove(field)
         if len(features) > 0:
             features_dataframe = dataframe[features]
+            features_dataframe.index = nodes_ids
         else:
-            features_dataframe = pd.DataFrame(index=dataframe.index)
+            features_dataframe = pd.DataFrame(index=nodes_ids)
 
         cols = [
             col for col in features_dataframe.columns
@@ -41,16 +50,16 @@ class n4j_client():
 
         return clean_dataframe
 
-    def get_edges(self, data):
-        labels = [entry["collection"] for entry in data]
+    def get_edges(self, labels):
         pulling_query = """
                     MATCH (a)-->(b)
                     WHERE any(label in labels(a) WHERE label in $labels) \
                         and any(label in labels(b) WHERE label in $labels)
-                    RETURN a.id AS source, b.id AS target
+                    RETURN ID(a) AS source, ID(b) AS target
                     """
         edges = self.graph.run(pulling_query, parameters={"labels": labels})
         return to_pandas_data_frame(edges)
+
     @logger.catch()
     def set_emb(self, nodes_id: list, nodes_embeddings: list):
         logger.info("[*] Atualizando embeddings no banco de dados")
@@ -59,16 +68,16 @@ class n4j_client():
         transaction = self.graph.begin()
         for node_id, node_emb in zip(nodes_id, nodes_embeddings):
             count += 1
-            node = self.node_matcher.match().where(id=node_id).first()
+            node = self.node_matcher.get(node_id)
             try:
                 label = list(node.labels)[0]
             except AttributeError:
                 logger.error(node_id)
             set_query = """
-                    MATCH (a:{label})
-                    WHERE  a.id = $node_id
+                    MATCH (a:{node_label})
+                    WHERE  ID(a) = $node_id
                     SET a.embedding = $node_emb
-                    """.format(label=label)
+                    """.format(node_label=label)
             transaction.run(set_query, parameters={
                             "node_id": node_id,
                             "node_emb": node_emb})
@@ -79,34 +88,36 @@ class n4j_client():
                 transaction.commit()
                 transaction = self.graph.begin()
 
-    def get_neighboors(self, node_list):
+    @logger.catch()
+    def get_neighboors(self, node_list, label_list):
         neighboors = [list(self.graph.run("""
-                MATCH (a)-[*1]-(b)
+                MATCH (a:{node_label})-[*1]-(b)
                 WHERE  a.id = $nid
-                return collect(b.id) as neighboors
-                """, parameters={"nid": node_id}))
-            for node_id in node_list]
+                return collect(ID(b)) as neighboors
+                """.format(node_label=label), parameters={"nid": node_id}))
+            for node_id, label in zip(node_list, label_list)]
 
         return neighboors
 
-    def get_node_features(self, node_list):
-        nodes = [self.node_matcher.match().where(id=node_id).first()
-                 for node_id in node_list]
+    @logger.catch()
+    def get_node_features(self, node_list, label_list):
+        logger.info('[*] Baixando features do nó')
+        nodes = [self.node_matcher.match(label).where(id=node_id).first()
+                 for node_id, label in zip(node_list, label_list)]
 
         return nodes
 
     @logger.catch()
     def get_recommendations(self, node_list, label_list, limit=15):
-        recommendation_query = """
-            MATCH (a)-[*..2]-(b)
-            WHERE a.id = $id AND EXISTS (a.embedding) AND EXISTS(b.embedding)
-            RETURN b.id as id,labels(b) as label
+        results = [to_pandas_data_frame(self.graph.run("""
+            MATCH (a:{node_label})-[*..2]-(b)
+            WHERE a.id = $id AND EXISTS (a.embedding) AND EXISTS (b.embedding)
+            RETURN DISTINCT b.id as id,labels(b) as label
             ORDER BY apoc.algo.cosineSimilarity(a.embedding,b.embedding)
             LIMIT $limit
-        """
-        results = [to_pandas_data_frame(self.graph.run(recommendation_query,
-                                                       parameters={"id": node_id, "limit": limit}))
-                   for node_id in node_list]
+        """.format(node_label=label),
+            parameters={"id": node_id, "limit": limit}))
+            for node_id, label in zip(node_list, label_list)]
         recommendations = []
         for result in results:
             node_rec = {}

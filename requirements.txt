@@ -10,3 +10,4 @@ stellargraph==1.2.1
 tensorflow==2.5.0
 tqdm==4.61.1
 uvicorn==0.13.4
+chardet==4.0.0
