@@ -1,0 +1,102 @@
+{
+    "data": [
+        {
+            "collection": "games",
+            "unique_id": "id",
+            "features": {
+                "summary": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            },
+            "nodes": {
+                "collection": {
+                    "unique_id": "id",
+                    "features": {
+                        "name": {
+                            "type": "categorical"
+                        }
+                    }
+                },
+                "franchises": {
+                    "unique_id": "id",
+                    "features": {
+                        "name": {
+                            "type": "categorical"
+                        }
+                    }
+                },
+                "game_engines": {
+                    "unique_id": "id",
+                    "features": {
+                        "name": {
+                            "type": "categorical"
+                        }
+                    }
+                },
+                "game_modes": {
+                    "unique_id": "id",
+                    "features": {
+                        "name": {
+                            "type": "categorical"
+                        }
+                    }
+                },
+                "genres": {
+                    "unique_id": "id",
+                    "features": {
+                        "name": {
+                            "type": "categorical"
+                        }
+                    }
+                },
+                "keywords": {
+                    "unique_id": "id",
+                    "features": {
+                        "name": {
+                            "type": "categorical"
+                        }
+                    }
+                },
+                "platforms": {
+                    "unique_id": "id",
+                    "features": {
+                        "name": {
+                            "type": "categorical"
+                        }
+                    }
+                },
+                "player_perspectives": {
+                    "unique_id": "id",
+                    "features": {
+                        "name": {
+                            "type": "categorical"
+                        }
+                    }
+                },
+                "similar_games": {
+                    "unique_id": "id",
+                    "features": {
+                        "name": {
+                            "type": "categorical"
+                        }
+                    }
+                },
+                "themes": {
+                    "unique_id": "id",
+                    "features": {
+                        "name": {
+                            "type": "categorical"
+                        }
+                    }
+                }
+            }
+        }
+    ],
+    "model": {
+        "model_path": "data/model/",
+        "graph_path": "data/model/"
+    }
+}

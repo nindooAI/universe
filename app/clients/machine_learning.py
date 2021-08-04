@@ -13,24 +13,27 @@ import stellargraph as sg
 from stellargraph.data import UnsupervisedSampler
 
 
+@logger.catch()
 class Universe:
+    @logger.catch()
     def __init__(
         self,
         edges_csv=None,
         nodes_csv=None,
         model_path=None,
-        n_walks=3,
-        length=4,
+        n_walks=1,
+        length=2,
         batch_size=1000,
     ):
 
         if model_path:
-            logger.info("[!] Carregando modelos e dados salvos da última versão.")
+            logger.info(
+                "[!] Carregando modelos e dados salvos da última versão.")
             self.emb_model = self.load_model(model_path)
 
         self.edges_df = pd.read_csv(edges_csv)
         self.online_edges = self.edges_df.copy()
-        self.transformed_df = pd.read_csv(nodes_csv, index_col="id")
+        self.transformed_df = pd.read_csv(nodes_csv, index_col=0)
         self.online_features = self.transformed_df.copy()
         self.graph = sg.StellarGraph(self.transformed_df, edges=self.edges_df)
         self.online_graph = self.graph
@@ -126,15 +129,18 @@ class Universe:
             columns=self.transformed_df.columns,
         )
 
-        self.online_features = pd.concat([self.transformed_df, new_features_df])
+        self.online_features = pd.concat(
+            [self.transformed_df, new_features_df])
 
         new_edges = []
         for node_id, node_neighboors in zip(ids, neighboors):
             for neighboor in node_neighboors:
                 new_edges.append([node_id, neighboor])
 
-        new_edges_df = pd.DataFrame(new_edges, columns=self.edges_df.columns[1:])
-        self.online_edges = pd.concat([self.edges_df, new_edges_df], ignore_index=True)
+        new_edges_df = pd.DataFrame(
+            new_edges, columns=self.edges_df.columns[1:])
+        self.online_edges = pd.concat(
+            [self.edges_df, new_edges_df], ignore_index=True)
 
         self.online_graph = sg.StellarGraph(
             self.online_features, edges=self.online_edges

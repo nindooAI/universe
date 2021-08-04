@@ -22,22 +22,35 @@ def merge_dfs(nodes_dfs_list):
     return pd.concat(nodes_dfs_list).fillna(-1)
 
 
-def transform(merged_df, preprocess_json):
+@logger.catch()
+def transform(merged_df, data):
     start = time.time()
     transformed = merged_df.copy()
-    logger.info("Pre-processando colunas do dataframe total")
+    logger.info("[*] Pre-processando colunas do dataframe total")
     string_cols = []
     categorical_cols = []
     assets = {}
-    for key, value in preprocess_json["features"].items():
-        if value == "string":
-            feature_columns, tokenized, vocab = string_transform(merged_df, key)
-            transformed[feature_columns] = tokenized[feature_columns]
-            transformed[key] = tokenized["tok_" + key]
-        if value == "categorical":
-            codes, uniques = categorical_transform(merged_df, key)
-            transformed["cat_" + key] = codes
-        transformed = transformed.drop(columns=key)
+    
+    for collection in data:
+        features = {}
+        if "features" in list(collection.keys()):
+            features.update(collection["features"])
+        if "nodes" in list(collection.keys()):
+            for nodes in collection["nodes"]:
+                features.update(collection["nodes"][nodes]["features"])
+
+        for key, value in features.items():
+            print(key)
+            print(value)
+            if value['type'] == "string":
+                feature_columns, tokenized, vocab = string_transform(
+                    merged_df, key)
+                transformed[feature_columns] = tokenized[feature_columns]
+                transformed[key] = tokenized["tok_" + key]
+            if value['type'] == "categorical":
+                codes, uniques = categorical_transform(merged_df, key)
+                transformed["cat_" + key] = codes
+            transformed = transformed.drop(columns=key)
 
     end = time.time()
     logger.info("Tempo de pre-processamento " + str(end - start))
